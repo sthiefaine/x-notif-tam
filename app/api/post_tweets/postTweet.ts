@@ -36,13 +36,25 @@ const wait = (ms: number): Promise<void> =>
  * @returns {Promise<Browser>} Instance du navigateur
  */
 export const launchBrowser = async (): Promise<Browser> => {
+
+  const serverlessArgs = [
+    '--no-sandbox',
+    '--disable-setuid-sandbox',
+    '--disable-dev-shm-usage',
+    '--disable-accelerated-2d-canvas',
+    '--no-first-run',
+    '--no-zygote',
+    '--single-process',
+    '--disable-gpu'
+  ];
+
   console.log("Launching browser");
   return await puppeteer.launch({
-    args: isDev ? [] : chromium.args,
+    args: isDev ? [] : [...chromium.args, ...serverlessArgs],
     executablePath: isDev
       ? localExecutablePath
       : await chromium.executablePath(remoteExecutablePath),
-    headless: isDev ? false : chromium.headless,
+    headless: isDev ? false : true,
   });
 };
 
