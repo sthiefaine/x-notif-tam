@@ -1,0 +1,13 @@
+{
+  "regions": ["cdg1"],
+  "crons": [
+    {
+      "path": "/api/post_tweets",
+      "schedule": "*/4 4-23 * * *"
+    },
+    {
+      "path": "/api/post_tweets",
+      "schedule": "*/20 0-4 * * *"
+    }
+  ]
+}

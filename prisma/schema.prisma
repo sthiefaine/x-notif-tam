@@ -1,0 +1,349 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Route {
+  id                String             @id @map("route_id")
+  shortName         String?            @map("route_short_name")
+  longName          String?            @map("route_long_name")
+  type              Int                @default(0) @map("route_type")
+  color             String?            @map("route_color")
+  textColor         String?            @map("route_text_color")
+  dailyMetrics      DailyMetric[]
+  hourlyMetrics     HourlyMetric[]
+  geometries        LineGeometry[]
+  realtimeDelays    RealtimeDelay[]
+  routeServiceTimes RouteServiceTime[]
+  stopMetrics       StopMetric[]
+  stopSequence      StopSequence[]
+  trips             Trip[]
+
+  @@map("routes")
+}
+
+model Alert {
+  id              String    @id
+  timeStart       DateTime
+  timeEnd         DateTime?
+  cause           String    @default("UNKNOWN_CAUSE")
+  effect          String    @default("UNKNOWN_EFFECT")
+  headerText      String
+  descriptionText String
+  url             String?
+  routeIds        String?
+  stopIds         String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  isPosted        Boolean   @default(false)
+  isComplement    Boolean   @default(false)
+  parentAlertId   String?
+  parentAlert     Alert?    @relation("AlertComplements", fields: [parentAlertId], references: [id])
+  complements     Alert[]   @relation("AlertComplements")
+
+  @@map("alerts")
+}
+
+model LineGeometry {
+  id          Int      @id @default(autoincrement())
+  routeId     String   @map("route_id")
+  lineType    String   @map("line_type")
+  geometry    Json     @map("geometry")
+  properties  Json     @map("properties")
+  lastUpdated DateTime @default(now()) @map("last_updated")
+  route       Route    @relation(fields: [routeId], references: [id])
+
+  @@index([routeId])
+  @@index([lineType])
+  @@map("line_geometries")
+}
+
+model Trip {
+  id                   String          @id @map("trip_id")
+  routeId              String          @map("route_id")
+  serviceId            String          @map("service_id")
+  headsign             String?         @map("trip_headsign")
+  directionId          Int?            @map("direction_id")
+  blockId              String?         @map("block_id")
+  shapeId              String?         @map("shape_id")
+  wheelchairAccessible Int?            @map("wheelchair_accessible")
+  bikesAllowed         Int?            @map("bikes_allowed")
+  realtimeDelays       RealtimeDelay[]
+  stopTimes            StopTime[]
+  route                Route           @relation(fields: [routeId], references: [id])
+
+  @@map("trips")
+}
+
+model StopTime {
+  tripId        String @map("trip_id")
+  arrivalTime   String @map("arrival_time")
+  departureTime String @map("departure_time")
+  stopId        String @map("stop_id")
+  stopSequence  Int    @map("stop_sequence")
+  pickupType    Int?   @map("pickup_type")
+  dropOffType   Int?   @map("drop_off_type")
+  stop          Stop   @relation(fields: [stopId], references: [id])
+  trip          Trip   @relation(fields: [tripId], references: [id])
+
+  @@id([tripId, stopId, stopSequence])
+  @@map("stop_times")
+}
+
+model Stop {
+  id             String          @id @map("stop_id")
+  code           String?         @map("stop_code")
+  name           String          @map("stop_name")
+  lat            Float           @map("stop_lat")
+  lon            Float           @map("stop_lon")
+  locationType   Int?            @map("location_type")
+  parentStation  String?         @map("parent_station")
+  wheelchair     Int?            @map("wheelchair_boarding")
+  realtimeDelays RealtimeDelay[]
+  stopMetrics    StopMetric[]
+  stopSequence   StopSequence[]
+  stopTimes      StopTime[]
+
+  hourlyStopMetrics HourlyStopMetric[]
+  @@map("stops")
+}
+
+model StopSequence {
+  id          Int     @id @default(autoincrement())
+  routeId     String  @map("route_id")
+  stopId      String  @map("stop_id")
+  directionId Int     @default(0) @map("direction_id")
+  position    Int
+  isTerminus  Boolean @default(false) @map("is_terminus")
+  route       Route   @relation(fields: [routeId], references: [id])
+  stop        Stop    @relation(fields: [stopId], references: [id])
+
+  @@unique([routeId, stopId, directionId])
+  @@map("stop_sequences")
+}
+
+model RouteServiceTime {
+  id        Int    @id @default(autoincrement())
+  routeId   String @map("route_id")
+  serviceId String @map("service_id")
+  startTime String @map("start_time")
+  endTime   String @map("end_time")
+  route     Route  @relation(fields: [routeId], references: [id])
+
+  @@unique([routeId, serviceId])
+  @@map("route_service_times")
+}
+
+model RealtimeDelay {
+  id            Int      @id @default(autoincrement())
+  collectedAt   DateTime @default(now()) @map("collected_at")
+  tripId        String   @map("trip_id")
+  routeId       String   @map("route_id")
+  stopId        String   @map("stop_id")
+  scheduledTime BigInt?  @map("scheduled_time")
+  actualTime    BigInt?  @map("actual_time")
+  delay         Int      @default(0)
+  status        String   @default("SCHEDULED")
+  route         Route    @relation(fields: [routeId], references: [id])
+  stop          Stop     @relation(fields: [stopId], references: [id])
+  trip          Trip     @relation(fields: [tripId], references: [id])
+
+  @@index([tripId])
+  @@index([routeId])
+  @@index([stopId])
+  @@index([collectedAt])
+  @@map("realtime_delays")
+}
+
+model DailyMetric {
+  id             Int                  @id @default(autoincrement())
+  date           DateTime
+  routeId        String               @map("route_id")
+  totalTrips     Int                  @map("total_trips")
+  totalStops     Int                  @map("total_stops")
+  avgDelay       Float                @map("avg_delay")
+  maxDelay       Float                @map("max_delay")
+  minDelay       Float                @map("min_delay")
+  delay120to300s Float                @map("delay_120_to_300s")
+  delay30to60s   Float                @map("delay_30_to_60s")
+  delay60to120s  Float                @map("delay_60_to_120s")
+  delayOver300s  Float                @map("delay_over_300s")
+  delayUnder30s  Float                @map("delay_under_30s")
+  earlyRate120   Float                @map("early_rate_120")
+  earlyRate30    Float                @map("early_rate_30")
+  lateRate120    Float                @map("late_rate_120")
+  lateRate30     Float                @map("late_rate_30")
+  onTimeRate120  Float                @map("on_time_rate_120")
+  onTimeRate30   Float                @map("on_time_rate_30")
+  earlyRate60    Float                @map("early_rate_60")
+  lateRate60     Float                @map("late_rate_60")
+  onTimeRate60   Float                @map("on_time_rate_60")
+  route          Route                @relation(fields: [routeId], references: [id])
+  weatherImpacts DailyWeatherImpact[]
+
+  @@unique([date, routeId])
+  @@index([date])
+  @@index([routeId])
+  @@map("daily_metrics")
+}
+
+model HourlyMetric {
+  id             Int                   @id @default(autoincrement())
+  date           DateTime
+  hour           Int
+  routeId        String                @map("route_id")
+  avgDelay       Float                 @map("avg_delay")
+  maxDelay       Float                 @map("max_delay")
+  minDelay       Float                 @map("min_delay")
+  observations   Int
+  delay120to300s Float                 @default(0) @map("delay_120_to_300s")
+  delay30to60s   Float                 @default(0) @map("delay_30_to_60s")
+  delay60to120s  Float                 @default(0) @map("delay_60_to_120s")
+  delayOver300s  Float                 @default(0) @map("delay_over_300s")
+  delayUnder30s  Float                 @default(0) @map("delay_under_30s")
+  earlyRate120   Float                 @default(0) @map("early_rate_120")
+  earlyRate30    Float                 @default(0) @map("early_rate_30")
+  lateRate120    Float                 @default(0) @map("late_rate_120")
+  lateRate30     Float                 @default(0) @map("late_rate_30")
+  onTimeRate120  Float                 @default(0) @map("on_time_rate_120")
+  onTimeRate30   Float                 @default(0) @map("on_time_rate_30")
+  earlyRate60    Float                 @default(0) @map("early_rate_60")
+  lateRate60     Float                 @default(0) @map("late_rate_60")
+  onTimeRate60   Float                 @default(0) @map("on_time_rate_60")
+  route          Route                 @relation(fields: [routeId], references: [id])
+  weatherImpacts HourlyWeatherImpact[]
+
+  @@unique([date, hour, routeId])
+  @@index([date, hour])
+  @@index([routeId])
+  @@map("hourly_metrics")
+}
+
+model HourlyStopMetric {
+  id              Int      @id @default(autoincrement())
+  date            DateTime @db.Date
+  hour            Int      
+  stopId          String   @map("stop_id")
+  avgDelay        Float    @default(0) @map("avg_delay")
+  maxDelay        Float    @default(0) @map("max_delay")
+  minDelay        Float    @default(0) @map("min_delay")
+  observations    Int      @default(0)
+  delayUnder30s   Float    @default(0) @map("delay_under_30s")
+  delay30to60s    Float    @default(0) @map("delay_30_to_60s")
+  delay60to120s   Float    @default(0) @map("delay_60_to_120s")
+  delay120to300s  Float    @default(0) @map("delay_120_to_300s")
+  delayOver300s   Float    @default(0) @map("delay_over_300s")
+  earlyRate30     Float    @default(0) @map("early_rate_30")
+  earlyRate60     Float    @default(0) @map("early_rate_60")
+  earlyRate120    Float    @default(0) @map("early_rate_120")
+  onTimeRate30    Float    @default(0) @map("on_time_rate_30")
+  onTimeRate60    Float    @default(0) @map("on_time_rate_60")
+  onTimeRate120   Float    @default(0) @map("on_time_rate_120")
+  lateRate30      Float    @default(0) @map("late_rate_30")
+  lateRate60      Float    @default(0) @map("late_rate_60")
+  lateRate120     Float    @default(0) @map("late_rate_120")
+  
+  // Relation avec le modèle Stop
+  stop            Stop     @relation(fields: [stopId], references: [id])
+
+  // Contrainte d'unicité
+  @@unique([date, hour, stopId], name: "hourly_stop_metrics_unique_date_hour_stop")
+  
+  // Index pour des requêtes efficaces
+  @@index([date, hour], name: "hourly_stop_metrics_date_hour_idx")
+  @@index([stopId], name: "hourly_stop_metrics_stop_id_idx")
+  
+  // Nom de la table dans la base de données
+  @@map("hourly_stop_metrics")
+}
+
+model StopMetric {
+  id           Int      @id @default(autoincrement())
+  date         DateTime
+  routeId      String   @map("route_id")
+  stopId       String   @map("stop_id")
+  avgDelay     Float    @map("avg_delay")
+  maxDelay     Float    @map("max_delay")
+  minDelay     Float    @map("min_delay")
+  observations Int
+  onTimeRate   Float    @map("on_time_rate")
+  lateRate     Float    @map("late_rate")
+  earlyRate    Float    @map("early_rate")
+  route        Route    @relation(fields: [routeId], references: [id])
+  stop         Stop     @relation(fields: [stopId], references: [id])
+
+  @@unique([date, routeId, stopId])
+  @@index([date])
+  @@index([routeId])
+  @@index([stopId])
+  @@map("stop_metrics")
+}
+
+model WeatherData {
+  id            Int                   @id @default(autoincrement())
+  date          DateTime              @db.Date
+  hour          Int?
+  temperature   Float
+  precipitation Float
+  windSpeed     Float                 @map("wind_speed")
+  humidity      Float
+  cloudCover    Float                 @map("cloud_cover")
+  weatherCode   Int                   @map("weather_code")
+  weatherType   String                @map("weather_type")
+  snowDepth     Float?                @map("snow_depth")
+  snowfall      Float?
+  isRain        Boolean               @default(false)
+  isSnow        Boolean               @default(false)
+  isFog         Boolean               @default(false)
+  isStorm       Boolean               @default(false)
+  location      String
+  latitude      Float
+  longitude     Float
+  source        String                @default("open-meteo")
+  createdAt     DateTime              @default(now()) @map("created_at")
+  dailyMetrics  DailyWeatherImpact[]
+  hourlyMetrics HourlyWeatherImpact[]
+
+  @@unique([date, hour, location])
+  @@index([date])
+  @@index([location])
+  @@index([weatherCode])
+  @@index([date, location])
+  @@map("weather_data")
+}
+
+model DailyWeatherImpact {
+  id            Int         @id @default(autoincrement())
+  dailyMetricId Int         @map("daily_metric_id")
+  weatherId     Int         @map("weather_id")
+  impactScore   Float?      @map("impact_score")
+  dailyMetric   DailyMetric @relation(fields: [dailyMetricId], references: [id], onDelete: Cascade)
+  weather       WeatherData @relation(fields: [weatherId], references: [id], onDelete: Cascade)
+
+  @@unique([dailyMetricId, weatherId])
+  @@map("daily_weather_impacts")
+}
+
+model HourlyWeatherImpact {
+  id             Int          @id @default(autoincrement())
+  hourlyMetricId Int          @map("hourly_metric_id")
+  weatherId      Int          @map("weather_id")
+  impactScore    Float?       @map("impact_score")
+  hourlyMetric   HourlyMetric @relation(fields: [hourlyMetricId], references: [id], onDelete: Cascade)
+  weather        WeatherData  @relation(fields: [weatherId], references: [id], onDelete: Cascade)
+
+  @@unique([hourlyMetricId, weatherId])
+  @@map("hourly_weather_impacts")
+}
+
+model XSession {
+  id        Int      @id @default(autoincrement())
+  cookie    Json
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  @@map("x_sessions")
+}
