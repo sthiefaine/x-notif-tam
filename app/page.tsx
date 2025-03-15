@@ -1,7 +1,26 @@
 "use server";
+import { prisma } from "@/lib/prisma";
+import { unstable_cache } from "next/cache";
 import Link from "next/link";
 
+const getRoutesLineNumbers = unstable_cache(
+  async () => {
+    const routes = await prisma.route.findMany({
+      select: {
+        id: true,
+      },
+    });
+
+    return routes.map((route) => route.id.split("-")[1]);
+  },
+  ["routes-line-numbers"],
+  { revalidate: 86400, tags: ["routes-line-numbers"] }
+);
+
 export default async function Home() {
+  const routesLineNumbers = await getRoutesLineNumbers();
+  const apiBaseUrl = "https://x-notif-tam.vercel.app/api/alerts";
+
   return (
     <main>
       <div className="container">
@@ -12,12 +31,38 @@ export default async function Home() {
               Documentation complète pour accéder aux données d'alertes du
               réseau de transport en commun
             </p>
-            <div>
+            <div
+              className="button-group"
+              style={{ display: "flex", gap: "1rem" }}
+            >
               <Link
                 href="https://montpellier-transport-alerts.vercel.app/"
                 className="button"
               >
-                Consulter le site des alertes
+                Consulter le site des alertes et statistiques du réseau
+              </Link>
+              <Link
+                href="https://github.com/sthiefaine/x-notif-tam"
+                className="button"
+                style={{ backgroundColor: "#24292e", color: "white" }}
+              >
+                <span
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "0.5rem",
+                  }}
+                >
+                  <svg
+                    height="16"
+                    width="16"
+                    fill="currentColor"
+                    viewBox="0 0 16 16"
+                  >
+                    <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"></path>
+                  </svg>
+                  GitHub
+                </span>
               </Link>
             </div>
           </header>
@@ -40,7 +85,40 @@ export default async function Home() {
 
           <section className="section">
             <h2 className="section-title">Endpoint principal</h2>
-            <div className="code-block">GET /api/alerts</div>
+            <div className="code-block">
+              <a
+                href={apiBaseUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{
+                  color: "inherit",
+                  textDecoration: "none",
+                  display: "block",
+                }}
+              >
+                GET /api/alerts
+              </a>
+            </div>
+
+            <div style={{ marginBottom: "1.5rem" }}>
+              <h3 className="subheading" style={{ marginTop: 0 }}>
+                Récupérer les alertes actives
+              </h3>
+              <div className="code-block">
+                <a
+                  href={`${apiBaseUrl}?active=true`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{
+                    color: "inherit",
+                    textDecoration: "none",
+                    display: "block",
+                  }}
+                >
+                  GET /api/alerts?active=true
+                </a>
+              </div>
+            </div>
 
             <h3 className="subheading">Paramètres de requête</h3>
             <div className="table-container">
@@ -78,7 +156,10 @@ export default async function Home() {
                   <tr>
                     <td className="key">route</td>
                     <td>string</td>
-                    <td>Filtre par identifiant de ligne</td>
+                    <td>
+                      Filtre par identifiant de ligne:{" "}
+                      {routesLineNumbers.join(", ")}
+                    </td>
                   </tr>
                   <tr>
                     <td className="key">stop</td>
@@ -119,18 +200,22 @@ export default async function Home() {
             <h2 className="section-title">Exemples d'utilisation</h2>
 
             <div style={{ marginBottom: "1.5rem" }}>
-              <h3 className="subheading" style={{ marginTop: 0 }}>
-                Récupérer les alertes actives
-              </h3>
-              <div className="code-block">GET /api/alerts?active=true</div>
-            </div>
-
-            <div style={{ marginBottom: "1.5rem" }}>
               <h3 className="subheading">
                 Récupérer les alertes à venir pour une ligne spécifique
               </h3>
               <div className="code-block">
-                GET /api/alerts?upcoming=true&route=T1
+                <a
+                  href={`${apiBaseUrl}?upcoming=true&route=T1`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{
+                    color: "inherit",
+                    textDecoration: "none",
+                    display: "block",
+                  }}
+                >
+                  GET /api/alerts?upcoming=true&route=1
+                </a>
               </div>
             </div>
 
@@ -138,13 +223,37 @@ export default async function Home() {
               <h3 className="subheading">
                 Récupérer les alertes d'aujourd'hui
               </h3>
-              <div className="code-block">GET /api/alerts?timeFrame=today</div>
+              <div className="code-block">
+                <a
+                  href={`${apiBaseUrl}?timeFrame=today`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{
+                    color: "inherit",
+                    textDecoration: "none",
+                    display: "block",
+                  }}
+                >
+                  GET /api/alerts?timeFrame=today
+                </a>
+              </div>
             </div>
 
             <div>
               <h3 className="subheading">Paginer les résultats</h3>
               <div className="code-block">
-                GET /api/alerts?page=2&pageSize=10
+                <a
+                  href={`${apiBaseUrl}?page=2&pageSize=10`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{
+                    color: "inherit",
+                    textDecoration: "none",
+                    display: "block",
+                  }}
+                >
+                  GET /api/alerts?page=2&pageSize=10
+                </a>
               </div>
             </div>
           </section>
@@ -276,6 +385,29 @@ export default async function Home() {
                 Voir les alertes sur Twitter
               </a>
             </div>
+            <Link
+                href="https://github.com/sthiefaine/x-notif-tam"
+                className="button"
+                style={{ backgroundColor: "#24292e", color: "white" }}
+              >
+                <span
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "0.5rem",
+                  }}
+                >
+                  <svg
+                    height="16"
+                    width="16"
+                    fill="currentColor"
+                    viewBox="0 0 16 16"
+                  >
+                    <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"></path>
+                  </svg>
+                  GitHub
+                </span>
+              </Link>
           </section>
 
           <footer className="footer">

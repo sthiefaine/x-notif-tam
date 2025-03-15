@@ -1,6 +1,6 @@
-// app/api/alerts/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { Prisma } from "@prisma/client";
 
 // Simple in-memory rate limiter
 const RATE_LIMIT = 6; // requests per minute
@@ -100,20 +100,8 @@ export async function GET(request: NextRequest) {
     const sortOrder = searchParams.get("sortOrder") || "desc";
 
     // Construction de la clause where
-    let whereClause: any = {};
+    let whereClause: Prisma.AlertWhereInput = {};
     const now = new Date();
-
-    console.log("Date actuelle pour comparaison:", now.toISOString());
-    console.log("Requête d'alertes avec paramètres:", {
-      active,
-      completed,
-      upcoming,
-      route,
-      stop,
-      timeFrame,
-      page,
-      pageSize,
-    });
 
     // Filtres par statut d'alerte
     if (active === "true") {
@@ -138,7 +126,7 @@ export async function GET(request: NextRequest) {
     if (route) {
       whereClause = {
         ...whereClause,
-        routeIds: { contains: route },
+        routeIds: route.includes("-") ? `7-${route.split("-")[1]}` : `7-${route}`,
       };
     }
 
@@ -230,9 +218,10 @@ export async function GET(request: NextRequest) {
           // Pour chaque ID de route, récupérer le lineType
           const routeInfo = await Promise.all(
             routeIds.map(async (routeId) => {
+              const updatedRouteId = `8-${routeId.split("-")[1]}`;
               // Recherche du lineType dans la table LineGeometry
               const lineGeometry = await prisma.lineGeometry.findFirst({
-                where: { routeId },
+                where: { routeId: updatedRouteId },
                 select: { lineType: true },
               });
 
