@@ -1,59 +1,51 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { Prisma } from "@prisma/client";
+import { RateLimiterMemory, IRateLimiterRes } from "rate-limiter-flexible";
 
-// Simple in-memory rate limiter
-const RATE_LIMIT = 6; // requests per minute
-const RATE_LIMIT_WINDOW = 60 * 1000; // 1 minute in milliseconds
-const ipRequestCounts = new Map<string, { count: number; resetTime: number }>();
+const rateLimiter = new RateLimiterMemory({
+  points: 10, // requêtes autorisées
+  duration: 60, // Par minute
+});
 
 function getClientIp(request: NextRequest): string {
-  // Get IP from Vercel's headers or fallback to a placeholder
   const forwardedFor = request.headers.get("x-forwarded-for");
-  return forwardedFor?.split(",")[0] || "127.0.0.1";
+  const realIp = request.headers.get("x-real-ip");
+  return forwardedFor?.split(",")[0] || realIp || "127.0.0.1";
 }
 
-// Extracts route number from route ID
 function extractRouteNumber(routeId: string): string {
   return routeId.split("-").pop() || routeId;
 }
 
-// Function to check and apply rate limiting
-function checkRateLimit(request: NextRequest): {
+async function checkRateLimit(ip: string): Promise<{
   allowed: boolean;
   resetInSeconds: number;
-} {
-  const clientIp = getClientIp(request);
-  const now = Date.now();
-
-  // Get current state for this IP
-  const currentState = ipRequestCounts.get(clientIp);
-
-  // If no state or reset time has passed, create/reset the state
-  if (!currentState || now > currentState.resetTime) {
-    ipRequestCounts.set(clientIp, {
-      count: 1,
-      resetTime: now + RATE_LIMIT_WINDOW,
-    });
-    return { allowed: true, resetInSeconds: RATE_LIMIT_WINDOW / 1000 };
+  remaining: number;
+}> {
+  try {
+    const rateLimiterRes = await rateLimiter.consume(ip);
+    return {
+      allowed: true,
+      resetInSeconds: Math.ceil(rateLimiterRes.msBeforeNext / 1000),
+      remaining: rateLimiterRes.remainingPoints,
+    };
+  } catch (rejRes) {
+    const resetInSeconds = Math.ceil(
+      (rejRes as IRateLimiterRes).msBeforeNext ?? 0 / 1000
+    );
+    return {
+      allowed: false,
+      resetInSeconds,
+      remaining: 0,
+    };
   }
-
-  // If under limit, increment count
-  if (currentState.count < RATE_LIMIT) {
-    currentState.count++;
-    ipRequestCounts.set(clientIp, currentState);
-    const resetInSeconds = Math.ceil((currentState.resetTime - now) / 1000);
-    return { allowed: true, resetInSeconds };
-  }
-
-  // Over limit
-  const resetInSeconds = Math.ceil((currentState.resetTime - now) / 1000);
-  return { allowed: false, resetInSeconds };
 }
 
 export async function GET(request: NextRequest) {
-  // Apply rate limiting
-  const rateLimitResult = checkRateLimit(request);
+  const clientIp = getClientIp(request);
+  const rateLimitResult = await checkRateLimit(clientIp);
+
   if (!rateLimitResult.allowed) {
     return NextResponse.json(
       {
@@ -65,10 +57,10 @@ export async function GET(request: NextRequest) {
         headers: {
           "Content-Type": "application/json",
           "Retry-After": String(rateLimitResult.resetInSeconds),
-          "X-RateLimit-Limit": String(RATE_LIMIT),
+          "X-RateLimit-Limit": "6",
           "X-RateLimit-Remaining": "0",
           "X-RateLimit-Reset": String(
-            Math.ceil(Date.now() / 1000 + rateLimitResult.resetInSeconds)
+            Math.floor(Date.now() / 1000) + rateLimitResult.resetInSeconds
           ),
         },
       }
@@ -78,32 +70,25 @@ export async function GET(request: NextRequest) {
   try {
     const searchParams = request.nextUrl.searchParams;
 
-    // Filtres d'état
     const active = searchParams.get("active");
     const completed = searchParams.get("completed");
     const upcoming = searchParams.get("upcoming");
 
-    // Filtres de contenu
     const route = searchParams.get("route");
     const stop = searchParams.get("stop");
 
-    // Filtres de temps
     const timeFrame = searchParams.get("timeFrame");
 
-    // Pagination
     const page = parseInt(searchParams.get("page") || "1");
     const pageSize = parseInt(searchParams.get("pageSize") || "20");
     const skip = (page - 1) * pageSize;
 
-    // Tri
     const sortBy = searchParams.get("sortBy") || "timeStart";
     const sortOrder = searchParams.get("sortOrder") || "desc";
 
-    // Construction de la clause where
     let whereClause: Prisma.AlertWhereInput = {};
     const now = new Date();
 
-    // Filtres par statut d'alerte
     if (active === "true") {
       whereClause = {
         ...whereClause,
@@ -122,15 +107,15 @@ export async function GET(request: NextRequest) {
       };
     }
 
-    // Filtre par route
     if (route) {
       whereClause = {
         ...whereClause,
-        routeIds: route.includes("-") ? `7-${route.split("-")[1]}` : `7-${route}`,
+        routeIds: route.includes("-")
+          ? `7-${route.split("-")[1]}`
+          : `7-${route}`,
       };
     }
 
-    // Filtre par arrêt
     if (stop) {
       whereClause = {
         ...whereClause,
@@ -138,7 +123,6 @@ export async function GET(request: NextRequest) {
       };
     }
 
-    // Filtre par période
     if (timeFrame) {
       const startOfDay = new Date(now);
       startOfDay.setHours(0, 0, 0, 0);
@@ -147,7 +131,7 @@ export async function GET(request: NextRequest) {
         whereClause.timeStart = { gte: startOfDay };
       } else if (timeFrame === "week") {
         const startOfWeek = new Date(now);
-        startOfWeek.setDate(now.getDate() - now.getDay()); // Début de la semaine (dimanche)
+        startOfWeek.setDate(now.getDate() - now.getDay());
         startOfWeek.setHours(0, 0, 0, 0);
         whereClause.timeStart = { gte: startOfWeek };
       } else if (timeFrame === "month") {
@@ -156,14 +140,10 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    console.log("Clause where Prisma:", JSON.stringify(whereClause, null, 2));
-
-    // Requête pour obtenir le nombre total d'alertes (pour la pagination)
     const totalAlerts = await prisma.alert.count({
       where: whereClause,
     });
 
-    // Requête principale - utilisation de select pour exclure isPosted
     const alerts = await prisma.alert.findMany({
       where: whereClause,
       take: pageSize,
@@ -196,9 +176,6 @@ export async function GET(request: NextRequest) {
       },
     });
 
-    console.log(`Alertes trouvées: ${alerts.length}`);
-
-    // Récupérer les informations de lineType pour les routes associées
     const processedAlerts = await Promise.all(
       alerts.map(async (alert) => {
         let routeDetails: {
@@ -215,17 +192,14 @@ export async function GET(request: NextRequest) {
         if (alert.routeIds) {
           const routeIds = alert.routeIds.split(",").map((r) => r.trim());
 
-          // Pour chaque ID de route, récupérer le lineType
           const routeInfo = await Promise.all(
             routeIds.map(async (routeId) => {
               const updatedRouteId = `8-${routeId.split("-")[1]}`;
-              // Recherche du lineType dans la table LineGeometry
               const lineGeometry = await prisma.lineGeometry.findFirst({
                 where: { routeId: updatedRouteId },
                 select: { lineType: true },
               });
 
-              // Recherche des informations de base de la route
               const route = await prisma.route.findUnique({
                 where: { id: routeId },
                 select: {
@@ -260,7 +234,6 @@ export async function GET(request: NextRequest) {
       })
     );
 
-    // Calcul des informations de pagination
     const totalPages = Math.ceil(totalAlerts / pageSize);
     const hasNextPage = page < totalPages;
     const hasPrevPage = page > 1;
@@ -281,18 +254,15 @@ export async function GET(request: NextRequest) {
         status: 200,
         headers: {
           "Content-Type": "application/json",
-          "Cache-Control": "public, max-age=60", // Cache de 1 minute
-          "X-RateLimit-Limit": String(RATE_LIMIT),
-          "X-RateLimit-Remaining": String(
-            RATE_LIMIT -
-              (ipRequestCounts.get(getClientIp(request))?.count || 1) +
-              1
-          ),
+          "Cache-Control": "public, max-age=60",
+          "X-RateLimit-Limit": "6",
+          "X-RateLimit-Remaining": String(rateLimitResult.remaining),
           "X-RateLimit-Reset": String(
-            Math.ceil(
-              ipRequestCounts.get(getClientIp(request))?.resetTime || 0
-            ) / 1000
+            Math.floor(Date.now() / 1000) + rateLimitResult.resetInSeconds
           ),
+          "X-Data-Source":
+            "Donnees issues de Montpellier Mediterranee Metropole - Offre de transport TAM en temps reel",
+          "X-Data-License": "ODbL",
         },
       }
     );
@@ -303,7 +273,6 @@ export async function GET(request: NextRequest) {
       {
         error: "Erreur lors de la récupération des alertes",
         message: error instanceof Error ? error.message : String(error),
-        stack: error instanceof Error ? error.stack : undefined,
       },
       {
         status: 500,

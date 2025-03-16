@@ -11,12 +11,13 @@
     "vercel-build": "npx prisma generate && next build"
   },
   "dependencies": {
+    "prisma": "^6.5.0",
     "@prisma/client": "^6.5.0",
     "@sparticuz/chromium-min": "^119.0.2",
-    "framer-motion": "^12.5.0",
     "next": "15.2.2",
     "puppeteer": "^22.9.0",
     "puppeteer-core": "^21.11.0",
+    "rate-limiter-flexible": "^6.1.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
   },
@@ -28,8 +29,10 @@
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "15.2.2",
-    "prisma": "^6.5.0",
     "tailwindcss": "^4",
     "typescript": "^5"
+  },
+  "optionalDependencies": {
+    "@tailwindcss/oxide-linux-arm64-gnu": "^4.0.1"
   }
 }

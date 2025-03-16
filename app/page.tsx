@@ -1,4 +1,3 @@
-"use server";
 import { prisma } from "@/lib/prisma";
 import { unstable_cache } from "next/cache";
 import Link from "next/link";
@@ -11,7 +10,17 @@ const getRoutesLineNumbers = unstable_cache(
       },
     });
 
-    return routes.map((route) => route.id.split("-")[1]);
+    routes
+      .filter((route) => route.id.startsWith("7-"))
+      .map((route) => Number(route.id.split("-")[1]))
+      .sort((a, b) => {
+        return a - b;
+      });
+
+    return routes
+      .filter((route) => route.id.startsWith("7-"))
+      .map((route) => Number(route.id.split("-")[1]))
+      .sort((a, b) => a - b);
   },
   ["routes-line-numbers"],
   { revalidate: 86400, tags: ["routes-line-numbers"] }
@@ -26,21 +35,15 @@ export default async function Home() {
       <div className="container">
         <div className="scroll-container">
           <header className="header">
-            <h1 className="title">API d'alertes de transport Montpellier</h1>
+            <h1 className="title">API d'alertes des transports de Montpellier</h1>
             <p className="subtitle">
               Documentation complète pour accéder aux données d'alertes du
               réseau de transport en commun
             </p>
             <div
               className="button-group"
-              style={{ display: "flex", gap: "1rem" }}
+              style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "1rem" }}
             >
-              <Link
-                href="https://montpellier-transport-alerts.vercel.app/"
-                className="button"
-              >
-                Consulter le site des alertes et statistiques du réseau
-              </Link>
               <Link
                 href="https://github.com/sthiefaine/x-notif-tam"
                 className="button"
@@ -77,7 +80,7 @@ export default async function Home() {
             </p>
             <div className="info-box">
               <p className="info-text">
-                L'API est limitée à <strong>6 requêtes par minute</strong> par
+                L'API est limitée à <strong>10 requêtes par minute</strong> par
                 adresse IP.
               </p>
             </div>
@@ -276,13 +279,13 @@ export default async function Home() {
       "headerText": "Travaux sur la ligne T1",
       "descriptionText": "En raison de travaux de maintenance...",
       "url": "https://example.com/alerts/1234",
-      "routeIds": "T1,T2",
+      "routeIds": "7-1",
       "stopIds": "1234,5678",
       "isComplement": false,
       "parentAlertId": null,
       "routeDetails": [
         {
-          "routeId": "T-1",
+          "routeId": "7-1",
           "routeNumber": "1",
           "lineType": "main",
           "shortName": "1",
@@ -385,29 +388,56 @@ export default async function Home() {
                 Voir les alertes sur Twitter
               </a>
             </div>
-            <Link
-                href="https://github.com/sthiefaine/x-notif-tam"
-                className="button"
-                style={{ backgroundColor: "#24292e", color: "white" }}
+          </section>
+
+          {/* Nouvelle section sur la source des données et la licence */}
+          <section className="section">
+            <h2 className="section-title">Source des données et licence</h2>
+            <p className="paragraph">
+              Les données fournies par cette API proviennent de{" "}
+              <a 
+                href="https://data.montpellier3m.fr/dataset/offre-de-transport-tam-en-temps-reel" 
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{ textDecoration: "underline" }}
               >
-                <span
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "0.5rem",
-                  }}
-                >
-                  <svg
-                    height="16"
-                    width="16"
-                    fill="currentColor"
-                    viewBox="0 0 16 16"
-                  >
-                    <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"></path>
-                  </svg>
-                  GitHub
-                </span>
-              </Link>
+                Montpellier Méditerranée Métropole
+              </a>{" "}
+              via le jeu de données "Offre de transport TAM en temps réel".
+            </p>
+            
+            <p className="paragraph">
+              Cette API est distribuée sous licence{" "}
+              <a 
+                href="https://opendatacommons.org/licenses/odbl/summary/" 
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{ textDecoration: "underline" }}
+              >
+                ODbL (Open Database License)
+              </a>.
+            </p>
+            
+            <div className="info-box" style={{ marginTop: "1rem" }}>
+              <h3 className="subheading" style={{ marginTop: 0 }}>Transformation et enrichissement des données</h3>
+              <p className="info-text">
+                Cette API effectue plusieurs transformations sur les données d'origine tout en respectant la licence ODbL :
+              </p>
+              <ul className="list" style={{ marginTop: "0.5rem" }}>
+                <li>
+                  <strong>Conversion de format</strong> : Les données originales au format Protocol Buffers (.pb) sont converties en JSON pour une meilleure accessibilité et compatibilité web.
+                </li>
+                <li>
+                  <strong>Enrichissement des données</strong> : Notre API enrichit les données brutes en ajoutant des informations complémentaires et des métadonnées pour faciliter la navigation.
+                </li>
+                <li>
+                  <strong>Structuration optimisée</strong> : La structure de l'API est conçue pour faciliter l'intégration dans des applications clientes.
+                </li>
+              </ul>
+              <p className="info-text" style={{ marginTop: "0.5rem" }}>
+                Ces transformations préservent la nature des informations, leur granularité, leurs conditions temporelles et leur emprise géographique, conformément à l'article 4.4 de la licence ODbL.
+              </p>
+            </div>
           </section>
 
           <footer className="footer">
@@ -419,6 +449,9 @@ export default async function Home() {
               >
                 Retour au site principal
               </Link>
+            </p>
+            <p style={{ marginTop: "0.25rem", fontSize: "0.75rem", color: "#666" }}>
+              Données issues de Montpellier Méditerranée Métropole - Licence ODbL
             </p>
           </footer>
         </div>

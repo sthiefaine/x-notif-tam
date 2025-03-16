@@ -1,181 +1,104 @@
-# Système de publication automatique d'alertes sur Twitter/X
+# Documentation du système d'automatisation Twitter
 
-Ce système permet de publier automatiquement les alertes de transport sur le réseau social Twitter/X via un cron job Vercel. Les alertes sont récupérées depuis la base de données, regroupées intelligemment, et publiées avec un format optimisé pour la visibilité et la lisibilité.
+Ce document décrit le fonctionnement du système automatisé de publication des alertes de transport sur Twitter/X.
+
+## Architecture
+
+Le système d'automatisation Twitter utilise Puppeteer pour interagir avec l'interface web de Twitter et publier automatiquement les alertes de transport. Ce processus est déclenché par des cron jobs Vercel à intervalles réguliers.
+
+```
+┌───────────────┐    ┌──────────────────┐    ┌────────────────┐
+│               │    │                  │    │                │
+│  Base de      │───▶│  Script          │───▶│  Twitter/X     │
+│  données      │    │  Puppeteer       │    │                │
+│               │    │                  │    │                │
+└───────────────┘    └──────────────────┘    └────────────────┘
+```
+
+## Fonctionnalités principales
+
+1. **Récupération des alertes** : Le système interroge la base de données pour obtenir toutes les alertes non publiées
+2. **Regroupement intelligent** : Les alertes similaires sont regroupées pour éviter la duplication d'informations
+3. **Formatage des tweets** : Les alertes sont converties en messages Twitter structurés avec emojis et mise en forme
+4. **Authentification Twitter** : Le système gère les sessions Twitter avec stockage de cookies
+5. **Publication automatique** : Les tweets sont publiés en respectant les limites de caractères et les contraintes de l'API
+6. **Suivi de publication** : Les alertes publiées sont marquées pour éviter la duplication
 
 ## Technologies utilisées
 
-### Puppeteer
+- **Puppeteer** : Automatisation du navigateur pour interagir avec Twitter
+- **Chromium** : Navigateur headless utilisé par Puppeteer
+- **Vercel Cron Jobs** : Planification des tâches de publication
+- **Prisma ORM** : Interaction avec la base de données PostgreSQL
 
-Ce système utilise **Puppeteer**, une bibliothèque Node.js qui fournit une API de haut niveau pour contrôler Chrome/Chromium via le protocole DevTools. Puppeteer est utilisé pour :
+## Configuration
 
-- Automatiser la connexion à Twitter/X
-- Naviguer jusqu'à la page de composition de tweet
-- Remplir le contenu du tweet
-- Soumettre la publication
-- Gérer les sessions via les cookies
-
-### Vercel Cron Jobs
-
-Le système utilise **Vercel Cron Jobs** pour l'exécution planifiée des tâches. Les cron jobs sur Vercel :
-
-- Sont configurés dans le fichier `vercel.json`
-- S'exécutent directement dans l'infrastructure serverless de Vercel
-- Sont hautement fiables avec des métriques et des logs
-- Ne nécessitent pas d'infrastructure supplémentaire
-
-## Fonctionnement du cron job
-
-Le système utilise une tâche planifiée qui s'exécute à intervalles réguliers pour vérifier les nouvelles alertes non publiées et les poster sur Twitter/X.
-
-### Configuration du cron job dans vercel.json
-
-```json
-{
-  "crons": [
-    {
-      "path": "/api/test/tweet",
-      "schedule": "*/15 * * * *"
-    }
-  ]
-}
-```
-
-Cette configuration exécute le endpoint `/api/test/tweet` toutes les 15 minutes.
-
-## Processus d'automatisation
-
-1. **Récupération des alertes** - Le système récupère les alertes non publiées (où `isPosted = false`) depuis la base de données
-2. **Regroupement** - Les alertes avec le même titre sont regroupées pour éviter la duplication
-3. **Formatage** - Chaque groupe d'alertes est formaté en respectant la limite de 280 caractères
-4. **Authentification** - Le système se connecte à Twitter via Puppeteer, en utilisant les sessions enregistrées si disponibles
-5. **Publication** - Les tweets sont publiés via l'interface web de Twitter
-6. **Mise à jour** - Les alertes publiées sont marquées comme telles dans la base de données
-
-## Format des tweets
-
-Les tweets générés suivent un format spécifique pour une meilleure lisibilité :
+### Variables d'environnement requises
 
 ```
-[Emoji de cause] [Emoji tramway si applicable] [Heure de début]
-Ligne(s): [Liste des lignes concernées séparées par des tirets]
-[Description de l'alerte]
-
-#Montpellier
-```
-
-### Émojis contextuels
-
-En fonction de la cause de l'alerte, différents émojis sont utilisés :
-
-| Cause                | Emoji |
-|----------------------|-------|
-| TECHNICAL_PROBLEM    | 🔧    |
-| STRIKE              | 🪧    |
-| DEMONSTRATION       | 📢    |
-| ACCIDENT            | 🚨    |
-| HOLIDAY             | 🎉    |
-| WEATHER             | 🌦️    |
-| MAINTENANCE         | 🛠️    |
-| CONSTRUCTION        | 🚧    |
-| POLICE_ACTIVITY     | 👮    |
-| MEDICAL_EMERGENCY   | 🚑    |
-| TRAFFIC_JAM         | 🚏    |
-| Autres causes       | ⚠️    |
-
-De plus, un emoji 🚊 est ajouté si l'alerte concerne au moins une ligne de tramway (lignes 1-5).
-
-### Exemple de tweet
-
-```
-🛠️ 🚊 09:15
-Lignes: 1-2-24
-En raison de travaux sur les voies, trafic perturbé jusqu'à 18h.
-
-#Montpellier
-```
-
-## Regroupement des alertes
-
-Le système regroupe intelligemment les alertes ayant le même titre ("headerText") pour éviter de publier des tweets redondants. Par exemple, si plusieurs lignes sont affectées par le même incident, un seul tweet sera publié mentionnant toutes les lignes concernées.
-
-Les lignes sont toujours triées de manière logique :
-1. Tramways d'abord (lignes 1-5)
-2. Bus ensuite
-3. Par ordre numérique au sein de chaque catégorie
-
-## Gestion des sessions
-
-Le système utilise une stratégie efficace de gestion des sessions Twitter :
-
-1. Les sessions sont stockées dans la base de données (table `xSession`)
-2. Les cookies d'authentification sont réutilisés pour éviter des connexions multiples
-3. Les sessions expirées sont automatiquement nettoyées
-4. En cas d'échec avec une session existante, une nouvelle connexion est établie
-
-## Variables d'environnement requises
-
-Pour que le système fonctionne correctement, les variables d'environnement suivantes doivent être configurées :
-
-```
+# Identifiants Twitter
 USER_EMAIL=votre-email-twitter@exemple.com
 USER_PASSWORD=votre-mot-de-passe-twitter
 USER_HANDLE=votre-identifiant-twitter
+
+# Configuration Puppeteer
+NODE_ENV=production
 ```
 
-## Test manuel du système
+### Format des tweets
 
-Vous pouvez tester manuellement le système en utilisant les endpoints suivants :
+Les tweets sont formatés selon les règles suivantes :
 
-### Créer des alertes de test et vérifier leur formatage
+- **En-tête** : Heure de début et lignes concernées
+- **Émojis** : Adaptés en fonction du type d'incident (travaux, accident, etc.)
+- **Corps** : Description de l'incident
+- **Hashtag** : #Montpellier pour améliorer la visibilité
 
+Exemple de tweet :
 ```
-GET /api/test/tweet?createTests=true&dryRun=true
-```
+🚧 🚊 08:30
+Ligne: 1
+Travaux sur Avenue de la Liberté. Arrêt "Centre" non desservi jusqu'à 17:00.
 
-Cette requête va :
-1. Créer trois alertes de test (deux pour les tramways avec le même titre, une pour un bus)
-2. Simuler la création des tweets sans les publier
-3. Retourner un aperçu des tweets qui seraient publiés
-
-### Publier immédiatement toutes les alertes non publiées
-
-```
-GET /api/test/tweet
+#Montpellier
 ```
 
-Cette requête va traiter toutes les alertes non publiées, les regrouper, et les publier sur Twitter/X.
+## Fonctionnement technique
 
-### Options supplémentaires
+### Processus de publication
 
-| Paramètre    | Description                                                   |
-|--------------|---------------------------------------------------------------|
-| createTests  | Crée des alertes de test (true/false)                         |
-| dryRun       | Simule la publication sans poster réellement (true/false)     |
-| debug        | Affiche des informations de débogage supplémentaires (true/false) |
+1. **Récupération des alertes** : Le système récupère les alertes non publiées de la journée
+2. **Regroupement par en-tête** : Les alertes similaires sont regroupées
+3. **Connexion à Twitter** : Le système se connecte à Twitter avec les identifiants fournis
+4. **Publication des tweets** : Chaque groupe d'alertes est publié sous forme de tweet
+5. **Mise à jour des statuts** : Les alertes publiées sont marquées comme telles
 
-## Gestion des erreurs
+### Gestion des sessions Twitter
 
-Le système gère plusieurs scénarios d'erreur :
+Le système utilise une approche avancée pour la gestion des sessions :
 
-- Échec d'authentification Twitter
-- Problèmes de connexion réseau
-- Erreurs lors de la composition ou de la publication des tweets
+1. **Stockage des cookies** : Les cookies de session sont stockés en base de données
+2. **Réutilisation des sessions** : Les sessions valides sont réutilisées pour éviter des connexions répétées
+3. **Expiration** : Les sessions expirent après 24 heures pour respecter les contraintes de sécurité
 
-En cas d'erreur, le système conserve l'état "non publié" des alertes pour réessayer lors de la prochaine exécution du cron job.
+### Limitations et considérations
 
-## Optimisations et performances
+- Le système est soumis aux limitations des environnements serverless (timeout de 300s max)
+- L'automatisation est sensible aux changements d'interface de Twitter
+- La fréquence de publication est limitée pour éviter tout bannissement du compte
 
-- **Réutilisation de sessions** - Minimise le nombre de connexions à Twitter
-- **Regroupement d'alertes** - Réduit le nombre de tweets à publier
-- **Délais entre les tweets** - Évite les limitations de l'API Twitter
-- **Captures d'écran en cas d'erreur** - Facilite le débogage
-- **Timeout adaptés** - Améliore la fiabilité sur les connexions lentes
+## Exécution manuelle
 
-## Maintenance et surveillance
+Pour déclencher manuellement la publication des alertes :
 
-Pour surveiller le bon fonctionnement du système :
+```bash
+# Environnement de développement
+curl http://localhost:3000/api/post_tweets/
 
-1. Vérifiez les logs Vercel pour les exécutions de cron job
-2. Consultez le compte Twitter pour confirmer la publication
-3. Vérifiez la table `Alert` dans la base de données pour voir les statuts de publication
-4. Si nécessaire, utilisez l'endpoint de test avec `debug=true` pour un diagnostic approfondi
+```
+
+## Source des données et licence
+
+Les données publiées proviennent de [Montpellier Méditerranée Métropole](https://data.montpellier3m.fr/dataset/offre-de-transport-tam-en-temps-reel) via le jeu de données "Offre de transport TAM en temps réel", distribuées sous licence ODbL.
+
+Conformément à la licence ODbL, tous les tweets incluent une attribution claire de la source des données par la mention "#Montpellier" et le système respecte les conditions de partage à l'identique en rendant disponibles les alertes sous le même format via l'API.
