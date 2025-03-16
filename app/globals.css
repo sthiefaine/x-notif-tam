@@ -40,12 +40,12 @@ main {
 }
 
 .scroll-container {
-  overflow-y: auto;
-  max-height: calc(100vh - 4rem);
-  padding-right: 1rem;
+  height: 100dvh;
   scrollbar-width: thin;
   scrollbar-color: rgba(255, 255, 255, 0.3) transparent;
+  overflow-x: hidden;
 }
+
 
 .scroll-container::-webkit-scrollbar {
   width: 6px;
@@ -251,5 +251,45 @@ code {
   
   .section-title {
     font-size: 1.25rem;
+  }
+}
+
+.scrolling-banner-container {
+  width: 100%;
+  position: sticky;
+  z-index: 10;
+}
+
+.scrolling-banner {
+  display: flex;
+  top: -100px;
+  position: absolute;
+  animation: scrollBanner 70s linear infinite;
+  width: auto;
+}
+
+.scrolling-banner img {
+  height: 150px; 
+  display: block;
+}
+
+@media (max-width: 768px) {
+  .scrolling-banner {
+    animation: scrollBanner 100s linear infinite;
+  }
+}
+
+@media (max-width: 480px) {
+  .scrolling-banner {
+    animation: scrollBanner 140s linear infinite;
+  }
+}
+
+@keyframes scrollBanner {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(100%);
   }
 }

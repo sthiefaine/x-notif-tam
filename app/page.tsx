@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { unstable_cache } from "next/cache";
 import Link from "next/link";
+import Image from "next/image";
 
 const getRoutesLineNumbers = unstable_cache(
   async () => {
@@ -33,16 +34,24 @@ export default async function Home() {
   return (
     <main>
       <div className="container">
+        {" "}
         <div className="scroll-container">
           <header className="header">
-            <h1 className="title">API d'alertes des transports de Montpellier</h1>
+            <h1 className="title">
+              API d'alertes des transports de Montpellier
+            </h1>
             <p className="subtitle">
               Documentation complète pour accéder aux données d'alertes du
               réseau de transport en commun
             </p>
             <div
               className="button-group"
-              style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "1rem" }}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: "1rem",
+              }}
             >
               <Link
                 href="https://github.com/sthiefaine/x-notif-tam"
@@ -69,6 +78,32 @@ export default async function Home() {
               </Link>
             </div>
           </header>
+
+          <div className="scrolling-banner-container">
+            <div className="scrolling-banner">
+              <Image
+                src="/tram2-tam.png"
+                alt="Transports Montpellier L2 tramway"
+                priority
+                width={200}
+                height={120}
+              />
+              <div style={{ width: "100vw" }}></div>
+              <Image
+                src="/tram2-tam.png"
+                alt="Transports Montpellier L2 tramway"
+                width={200}
+                height={120}
+              />
+              <div style={{ width: "100vw" }}></div>
+              <Image
+                src="/tram2-tam.png"
+                alt="Transports Montpellier L2 tramway"
+                width={200}
+                height={120}
+              />
+            </div>
+          </div>
 
           <section className="section">
             <h2 className="section-title">Présentation de l'API</h2>
@@ -390,13 +425,12 @@ export default async function Home() {
             </div>
           </section>
 
-          {/* Nouvelle section sur la source des données et la licence */}
           <section className="section">
             <h2 className="section-title">Source des données et licence</h2>
             <p className="paragraph">
               Les données fournies par cette API proviennent de{" "}
-              <a 
-                href="https://data.montpellier3m.fr/dataset/offre-de-transport-tam-en-temps-reel" 
+              <a
+                href="https://data.montpellier3m.fr/dataset/offre-de-transport-tam-en-temps-reel"
                 target="_blank"
                 rel="noopener noreferrer"
                 style={{ textDecoration: "underline" }}
@@ -405,37 +439,50 @@ export default async function Home() {
               </a>{" "}
               via le jeu de données "Offre de transport TAM en temps réel".
             </p>
-            
+
             <p className="paragraph">
               Cette API est distribuée sous licence{" "}
-              <a 
-                href="https://opendatacommons.org/licenses/odbl/summary/" 
+              <a
+                href="https://opendatacommons.org/licenses/odbl/summary/"
                 target="_blank"
                 rel="noopener noreferrer"
                 style={{ textDecoration: "underline" }}
               >
                 ODbL (Open Database License)
-              </a>.
+              </a>
+              .
             </p>
-            
+
             <div className="info-box" style={{ marginTop: "1rem" }}>
-              <h3 className="subheading" style={{ marginTop: 0 }}>Transformation et enrichissement des données</h3>
+              <h3 className="subheading" style={{ marginTop: 0 }}>
+                Transformation et enrichissement des données
+              </h3>
               <p className="info-text">
-                Cette API effectue plusieurs transformations sur les données d'origine tout en respectant la licence ODbL :
+                Cette API effectue plusieurs transformations sur les données
+                d'origine tout en respectant la licence ODbL :
               </p>
               <ul className="list" style={{ marginTop: "0.5rem" }}>
                 <li>
-                  <strong>Conversion de format</strong> : Les données originales au format Protocol Buffers (.pb) sont converties en JSON pour une meilleure accessibilité et compatibilité web.
+                  <strong>Conversion de format</strong> : Les données originales
+                  au format Protocol Buffers (.pb) sont converties en JSON pour
+                  une meilleure accessibilité et compatibilité web.
                 </li>
                 <li>
-                  <strong>Enrichissement des données</strong> : Notre API enrichit les données brutes en ajoutant des informations complémentaires et des métadonnées pour faciliter la navigation.
+                  <strong>Enrichissement des données</strong> : Notre API
+                  enrichit les données brutes en ajoutant des informations
+                  complémentaires et des métadonnées pour faciliter la
+                  navigation.
                 </li>
                 <li>
-                  <strong>Structuration optimisée</strong> : La structure de l'API est conçue pour faciliter l'intégration dans des applications clientes.
+                  <strong>Structuration optimisée</strong> : La structure de
+                  l'API est conçue pour faciliter l'intégration dans des
+                  applications clientes.
                 </li>
               </ul>
               <p className="info-text" style={{ marginTop: "0.5rem" }}>
-                Ces transformations préservent la nature des informations, leur granularité, leurs conditions temporelles et leur emprise géographique, conformément à l'article 4.4 de la licence ODbL.
+                Ces transformations préservent la nature des informations, leur
+                granularité, leurs conditions temporelles et leur emprise
+                géographique, conformément à l'article 4.4 de la licence ODbL.
               </p>
             </div>
           </section>
@@ -450,8 +497,15 @@ export default async function Home() {
                 Retour au site principal
               </Link>
             </p>
-            <p style={{ marginTop: "0.25rem", fontSize: "0.75rem", color: "#666" }}>
-              Données issues de Montpellier Méditerranée Métropole - Licence ODbL
+            <p
+              style={{
+                marginTop: "0.25rem",
+                fontSize: "0.75rem",
+                color: "#666",
+              }}
+            >
+              Données issues de Montpellier Méditerranée Métropole - Licence
+              ODbL
             </p>
           </footer>
         </div>

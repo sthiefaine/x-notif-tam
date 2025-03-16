@@ -1,72 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { Prisma } from "@prisma/client";
-import { RateLimiterMemory, IRateLimiterRes } from "rate-limiter-flexible";
-
-const rateLimiter = new RateLimiterMemory({
-  points: 10, // requêtes autorisées
-  duration: 60, // Par minute
-});
-
-function getClientIp(request: NextRequest): string {
-  const forwardedFor = request.headers.get("x-forwarded-for");
-  const realIp = request.headers.get("x-real-ip");
-  return forwardedFor?.split(",")[0] || realIp || "127.0.0.1";
-}
 
 function extractRouteNumber(routeId: string): string {
   return routeId.split("-").pop() || routeId;
 }
 
-async function checkRateLimit(ip: string): Promise<{
-  allowed: boolean;
-  resetInSeconds: number;
-  remaining: number;
-}> {
-  try {
-    const rateLimiterRes = await rateLimiter.consume(ip);
-    return {
-      allowed: true,
-      resetInSeconds: Math.ceil(rateLimiterRes.msBeforeNext / 1000),
-      remaining: rateLimiterRes.remainingPoints,
-    };
-  } catch (rejRes) {
-    const resetInSeconds = Math.ceil(
-      (rejRes as IRateLimiterRes).msBeforeNext ?? 0 / 1000
-    );
-    return {
-      allowed: false,
-      resetInSeconds,
-      remaining: 0,
-    };
-  }
-}
-
 export async function GET(request: NextRequest) {
-  const clientIp = getClientIp(request);
-  const rateLimitResult = await checkRateLimit(clientIp);
-
-  if (!rateLimitResult.allowed) {
-    return NextResponse.json(
-      {
-        error: "Rate limit exceeded",
-        message: `Too many requests. Please try again in ${rateLimitResult.resetInSeconds} seconds.`,
-      },
-      {
-        status: 429,
-        headers: {
-          "Content-Type": "application/json",
-          "Retry-After": String(rateLimitResult.resetInSeconds),
-          "X-RateLimit-Limit": "6",
-          "X-RateLimit-Remaining": "0",
-          "X-RateLimit-Reset": String(
-            Math.floor(Date.now() / 1000) + rateLimitResult.resetInSeconds
-          ),
-        },
-      }
-    );
-  }
-
   try {
     const searchParams = request.nextUrl.searchParams;
 
@@ -255,11 +195,6 @@ export async function GET(request: NextRequest) {
         headers: {
           "Content-Type": "application/json",
           "Cache-Control": "public, max-age=60",
-          "X-RateLimit-Limit": "6",
-          "X-RateLimit-Remaining": String(rateLimitResult.remaining),
-          "X-RateLimit-Reset": String(
-            Math.floor(Date.now() / 1000) + rateLimitResult.resetInSeconds
-          ),
           "X-Data-Source":
             "Donnees issues de Montpellier Mediterranee Metropole - Offre de transport TAM en temps reel",
           "X-Data-License": "ODbL",

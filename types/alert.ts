@@ -1,4 +1,3 @@
-// types/alert.ts
 export interface Alert {
   id: string;
   timeStart: Date;
