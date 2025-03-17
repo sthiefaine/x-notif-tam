@@ -36,16 +36,15 @@ const wait = (ms: number): Promise<void> =>
  * @returns {Promise<Browser>} Instance du navigateur
  */
 export const launchBrowser = async (): Promise<Browser> => {
-
   const serverlessArgs = [
-    '--no-sandbox',
-    '--disable-setuid-sandbox',
-    '--disable-dev-shm-usage',
-    '--disable-accelerated-2d-canvas',
-    '--no-first-run',
-    '--no-zygote',
-    '--single-process',
-    '--disable-gpu'
+    "--no-sandbox",
+    "--disable-setuid-sandbox",
+    "--disable-dev-shm-usage",
+    "--disable-accelerated-2d-canvas",
+    "--no-first-run",
+    "--no-zygote",
+    "--single-process",
+    "--disable-gpu",
   ];
 
   console.log("Launching browser");
@@ -241,43 +240,40 @@ export const enterTweetContent = async (
       'textarea[autocapitalize="sentences"][autocomplete="on"][data-testid="tweetTextarea_0"]',
     ];
 
-      try {
-        await page.waitForSelector(selector[0], {
-          visible: true,
-          timeout: 0,
-        });
-        console.log(`Found tweet input with selector: ${selector}`);
+    try {
+      await page.waitForSelector(selector[0], {
+        visible: true,
+        timeout: 0,
+      });
+      console.log(`Found tweet input with selector: ${selector}`);
 
-        if (selector.includes("RichTextInputContainer")) {
-          // Utiliser l'injection JavaScript pour le container rich text
-          await page.evaluate((text: string) => {
-            const container = document.querySelector(
-              'div[data-testid="tweetTextarea_0RichTextInputContainer"]'
+      if (selector.includes("RichTextInputContainer")) {
+        // Utiliser l'injection JavaScript pour le container rich text
+        await page.evaluate((text: string) => {
+          const container = document.querySelector(
+            'div[data-testid="tweetTextarea_0RichTextInputContainer"]'
+          );
+          if (container) {
+            const editableDiv = container.querySelector(
+              '[contenteditable="true"]'
             );
-            if (container) {
-              const editableDiv = container.querySelector(
-                '[contenteditable="true"]'
-              );
-              if (editableDiv) {
-                editableDiv.textContent = text;
-                editableDiv.dispatchEvent(
-                  new Event("input", { bubbles: true })
-                );
-              }
+            if (editableDiv) {
+              editableDiv.textContent = text;
+              editableDiv.dispatchEvent(new Event("input", { bubbles: true }));
             }
-          }, content);
-        } else {
-          // Utiliser la frappe directe
-          await page.click(selector[0]);
-          await page.keyboard.type(content);
-        }
-
-        console.log("Tweet content entered successfully");
-        return true;
-      } catch (error) {
-        console.log(`Failed with selector ${selector}, trying next one`);
+          }
+        }, content);
+      } else {
+        // Utiliser la frappe directe
+        await page.click(selector[0]);
+        await page.keyboard.type(content);
       }
-    
+
+      console.log("Tweet content entered successfully");
+      return true;
+    } catch (error) {
+      console.log(`Failed with selector ${selector}, trying next one`);
+    }
 
     console.error("Failed to enter tweet content with any selector");
     return false;
@@ -472,7 +468,7 @@ export const loginToTwitter = async (): Promise<{
  */
 const isTramway = (routeId: string): boolean => {
   // Remove any prefix (like "T-" or "X-")
-  const numericPart = routeId.split('-').pop() || routeId;
+  const numericPart = routeId.split("-").pop() || routeId;
   const lineNumber = parseInt(numericPart, 10);
   return !isNaN(lineNumber) && lineNumber >= 1 && lineNumber <= 5;
 };
@@ -483,37 +479,39 @@ const isTramway = (routeId: string): boolean => {
  * @param isResolution Whether this is an incident resolution
  * @returns Appropriate emoji for the cause
  */
-const getCauseEmoji = (cause: string, isResolution: boolean = false): string => {
-  if (isResolution) return '';
-  
+const getCauseEmoji = (
+  cause: string,
+  isResolution: boolean = false
+): string => {
+  if (isResolution) return "";
+
   switch (cause) {
-    case 'TECHNICAL_PROBLEM':
-      return '🔧';
-    case 'STRIKE':
-      return '🪧';
-    case 'DEMONSTRATION':
-      return '📢';
-    case 'ACCIDENT':
-      return '🚨';
-    case 'HOLIDAY':
-      return '🎉';
-    case 'WEATHER':
-      return '🌦️';
-    case 'MAINTENANCE':
-      return '🛠️';
-    case 'CONSTRUCTION':
-      return '🚧';
-    case 'POLICE_ACTIVITY':
-      return '👮';
-    case 'MEDICAL_EMERGENCY':
-      return '🚑';
-    case 'TRAFFIC_JAM':
-      return '🚏';
+    case "TECHNICAL_PROBLEM":
+      return "🔧";
+    case "STRIKE":
+      return "🪧";
+    case "DEMONSTRATION":
+      return "📢";
+    case "ACCIDENT":
+      return "🚨";
+    case "HOLIDAY":
+      return "🎉";
+    case "WEATHER":
+      return "⛈";
+    case "MAINTENANCE":
+      return "🛠️";
+    case "CONSTRUCTION":
+      return "🚧";
+    case "POLICE_ACTIVITY":
+      return "👮";
+    case "MEDICAL_EMERGENCY":
+      return "🚑";
+    case "TRAFFIC_JAM":
+      return "🚏";
     default:
-      return '⚠️';
+      return "⚠️";
   }
 };
-
 
 /**
  * Formats a date to HH:MM format in Paris timezone
@@ -521,18 +519,18 @@ const getCauseEmoji = (cause: string, isResolution: boolean = false): string => 
  * @returns Formatted time string in Paris timezone
  */
 const formatTimeInParis = (date: Date): string => {
-  const formatter = new Intl.DateTimeFormat('fr-FR', {
-    timeZone: 'Europe/Paris',
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false
+  const formatter = new Intl.DateTimeFormat("fr-FR", {
+    timeZone: "Europe/Paris",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
   });
-  
+
   const parts = formatter.formatToParts(date);
-  const hour = parts.find(part => part.type === 'hour')?.value || '00';
-  const minute = parts.find(part => part.type === 'minute')?.value || '00';
-  
-  return `${hour.padStart(2, '0')}:${minute.padStart(2, '0')}`;
+  const hour = parts.find((part) => part.type === "hour")?.value || "00";
+  const minute = parts.find((part) => part.type === "minute")?.value || "00";
+
+  return `${hour.padStart(2, "0")}:${minute.padStart(2, "0")}`;
 };
 
 /**
@@ -541,7 +539,10 @@ const formatTimeInParis = (date: Date): string => {
  * @returns Formatted time string
  */
 const formatTime = (date: Date): string => {
-  return `${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`;
+  return `${date.getHours().toString().padStart(2, "0")}:${date
+    .getMinutes()
+    .toString()
+    .padStart(2, "0")}`;
 };
 
 /**
@@ -549,16 +550,18 @@ const formatTime = (date: Date): string => {
  * @param alerts Array of alerts to group
  * @returns Grouped alerts by header text
  */
-export const groupAlertsByHeader = (alerts: Alert[]): Record<string, Alert[]> => {
+export const groupAlertsByHeader = (
+  alerts: Alert[]
+): Record<string, Alert[]> => {
   const grouped: Record<string, Alert[]> = {};
-  
+
   for (const alert of alerts) {
     if (!grouped[alert.headerText]) {
       grouped[alert.headerText] = [];
     }
     grouped[alert.headerText].push(alert);
   }
-  
+
   return grouped;
 };
 
@@ -568,21 +571,22 @@ export const groupAlertsByHeader = (alerts: Alert[]): Record<string, Alert[]> =>
  * @returns Formatted tweet text
  */
 export const formatTweetFromAlertGroup = (alerts: Alert[]): string => {
-  if (alerts.length === 0) return '';
-  
+  if (alerts.length === 0) return "";
+
   const headerText = alerts[0].headerText;
-  const isResolution = headerText.toLowerCase().includes('reprise') || 
-                       headerText.toLowerCase().includes('résolution') || 
-                       headerText.toLowerCase().includes('fin d\'incident');
-  
+  const isResolution =
+    headerText.toLowerCase().includes("reprise") ||
+    headerText.toLowerCase().includes("résolution") ||
+    headerText.toLowerCase().includes("fin d'incident");
+
   // Get all unique route IDs from the group
   const allRouteIds = new Set<string>();
   let hasTramway = false;
-  
-  alerts.forEach(alert => {
+
+  alerts.forEach((alert) => {
     if (alert.routeIds) {
-      alert.routeIds.split(',').forEach(route => {
-        const trimmedRoute = (route.split('-').pop() || route).trim();
+      alert.routeIds.split(",").forEach((route) => {
+        const trimmedRoute = (route.split("-").pop() || route).trim();
         allRouteIds.add(trimmedRoute);
         if (isTramway(trimmedRoute)) {
           hasTramway = true;
@@ -590,45 +594,48 @@ export const formatTweetFromAlertGroup = (alerts: Alert[]): string => {
       });
     }
   });
-  
+
   // Sort routes by type (tramway first) and then by number
   const sortedRoutes = Array.from(allRouteIds).sort((a, b) => {
     const aIsTram = isTramway(a);
     const bIsTram = isTramway(b);
-    
+
     if (aIsTram && !bIsTram) return -1;
     if (!aIsTram && bIsTram) return 1;
-    
+
     // Extract numeric parts for comparison
-    const aNumeric = parseInt(a.replace(/^[A-Za-z\-]+/, ''), 10);
-    const bNumeric = parseInt(b.replace(/^[A-Za-z\-]+/, ''), 10);
-    
+    const aNumeric = parseInt(a.replace(/^[A-Za-z\-]+/, ""), 10);
+    const bNumeric = parseInt(b.replace(/^[A-Za-z\-]+/, ""), 10);
+
     return aNumeric - bNumeric;
   });
-  
+
   // Get start time from the first alert (they should be sorted by time)
   const startTime = formatTimeInParis(alerts[0].timeStart);
-  
+
   // Build the tweet
-  let tweet = '';
-  
+  let tweet = "";
+
   // Add cause emoji and tramway emoji if applicable
   const causeEmoji = getCauseEmoji(alerts[0].cause, isResolution);
   if (causeEmoji) tweet += `${causeEmoji} `;
-  if (hasTramway && !isResolution) tweet += '🚊 ';
-  
+  if (hasTramway && !isResolution) tweet += Math.random() < 0.5 ? "🚊 " : "🚋 ";
+
   // Add header and time
   tweet += `${startTime}\n`;
-  tweet += sortedRoutes.length > 1 ? `Lignes: ${sortedRoutes.join('-')}\n` : `Ligne: ${sortedRoutes[0]}\n`;
+  tweet +=
+    sortedRoutes.length > 1
+      ? `Lignes: ${sortedRoutes.join("-")}\n`
+      : `Ligne: ${sortedRoutes[0]}\n`;
   tweet += `${alerts[0].descriptionText}\n\n`;
-  tweet += `#Montpellier`;
-  
+  tweet += sortedRoutes.length > 1 ? `#Montpellier` : `#L${sortedRoutes[0]}TaM`;
+
   // Twitter has a 280 character limit
   if (tweet.length > 280) {
     // Truncate if needed
-    tweet = tweet.substring(0, 277) + '...';
+    tweet = tweet.substring(0, 277) + "...";
   }
-  
+
   return tweet;
 };
 
@@ -756,10 +763,7 @@ export const processUnpostedAlerts = async (): Promise<{
           gte: new Date(new Date().setHours(0, 0, 0, 0)), // Today
         },
       },
-      orderBy: [
-        { headerText: 'asc' },
-        { timeStart: 'asc' },
-      ],
+      orderBy: [{ headerText: "asc" }, { timeStart: "asc" }],
       take: 20, // Increased limit to handle grouping
     });
 
@@ -776,31 +780,39 @@ export const processUnpostedAlerts = async (): Promise<{
 
     // Group alerts by header text
     const groupedAlerts = groupAlertsByHeader(unpostedAlerts);
-    console.log(`Grouped into ${Object.keys(groupedAlerts).length} distinct alert headers`);
+    console.log(
+      `Grouped into ${Object.keys(groupedAlerts).length} distinct alert headers`
+    );
 
     // Process each group
     for (const [headerText, alertGroup] of Object.entries(groupedAlerts)) {
-      console.log(`Processing alert group with header: "${headerText}" (${alertGroup.length} alerts)`);
+      console.log(
+        `Processing alert group with header: "${headerText}" (${alertGroup.length} alerts)`
+      );
 
       // Formater le contenu du tweet pour le groupe
       const tweetContent = formatTweetFromAlertGroup(alertGroup);
 
       // Publier le tweet
       const result = await writeAndPostTweet(tweetContent);
-      
+
       if (result.success) {
         // Mettre à jour tous les alertes du groupe comme postées
-        const alertIds = alertGroup.map(alert => alert.id);
+        const alertIds = alertGroup.map((alert) => alert.id);
         await prisma.alert.updateMany({
           where: { id: { in: alertIds } },
           data: { isPosted: true },
         });
 
         processed += alertGroup.length;
-        messages.push(`Successfully posted ${alertGroup.length} alerts with header "${headerText}"`);
+        messages.push(
+          `Successfully posted ${alertGroup.length} alerts with header "${headerText}"`
+        );
       } else {
         failed += alertGroup.length;
-        messages.push(`Failed to post ${alertGroup.length} alerts with header "${headerText}": ${result.message}`);
+        messages.push(
+          `Failed to post ${alertGroup.length} alerts with header "${headerText}": ${result.message}`
+        );
       }
 
       // Wait a bit between posts to avoid rate limits
@@ -841,23 +853,23 @@ export const postToTwitter = async (): Promise<{
 }> => {
   console.log("Starting postToTwitter process");
   let loginResult;
-  
+
   try {
     // Step 1: Login to Twitter
     loginResult = await loginToTwitter();
-    
+
     if (!loginResult.success) {
       return {
         success: false,
         loginMessage: `Failed to login: ${loginResult.message}`,
         processed: 0,
         failed: 0,
-        messages: [`Login failed: ${loginResult.message}`]
+        messages: [`Login failed: ${loginResult.message}`],
       };
     }
-    
+
     console.log("Login successful, checking for unposted alerts");
-    
+
     // Step 2: Check for unposted alerts from today
     const unpostedAlerts = await prisma.alert.findMany({
       where: {
@@ -866,109 +878,125 @@ export const postToTwitter = async (): Promise<{
           gte: new Date(new Date().setHours(0, 0, 0, 0)), // Today
         },
       },
-      orderBy: [
-        { headerText: 'asc' },
-        { timeStart: 'asc' },
-      ],
+      orderBy: [{ headerText: "asc" }, { timeStart: "asc" }],
       take: 20, // Increased limit to handle grouping
     });
-    
+
     console.log(`Found ${unpostedAlerts.length} unposted alerts`);
-    
+
     if (unpostedAlerts.length === 0) {
       // Close browser if no alerts to post
       if (loginResult.browser) {
         await loginResult.browser.close();
         console.log("Browser closed - no alerts to post");
       }
-      
+
       return {
         success: true,
         loginMessage: loginResult.message,
         processed: 0,
         failed: 0,
-        messages: ["Login successful but no unposted alerts found"]
+        messages: ["Login successful but no unposted alerts found"],
       };
     }
-    
+
     // Step 3: Group alerts by header text
     const groupedAlerts = groupAlertsByHeader(unpostedAlerts);
-    console.log(`Grouped into ${Object.keys(groupedAlerts).length} distinct alert headers`);
-    
+    console.log(
+      `Grouped into ${Object.keys(groupedAlerts).length} distinct alert headers`
+    );
+
     // Step 4: Process each group of alerts
     const messages: string[] = [];
     let processed = 0;
     let failed = 0;
-    
+
     for (const [headerText, alertGroup] of Object.entries(groupedAlerts)) {
-      console.log(`Processing alert group with header: "${headerText}" (${alertGroup.length} alerts)`);
-      
+      console.log(
+        `Processing alert group with header: "${headerText}" (${alertGroup.length} alerts)`
+      );
+
       try {
         // Format the tweet content for the group
         const tweetContent = formatTweetFromAlertGroup(alertGroup);
-        
+
         // Reuse the page from login if it exists
         if (loginResult.page) {
           // Navigate to compose tweet page if needed
           await goToComposeTweet(loginResult.page);
-          
+
           // Enter tweet content
-          const contentEntered = await enterTweetContent(loginResult.page, tweetContent);
+          const contentEntered = await enterTweetContent(
+            loginResult.page,
+            tweetContent
+          );
           if (!contentEntered) {
             throw new Error("Failed to enter tweet content");
           }
-          
+
           // Wait a moment for content to register
           await wait(500);
-          
+
           // Submit the tweet
           const submitted = await submitTweet(loginResult.page);
           if (!submitted) {
             throw new Error("Failed to submit tweet");
           }
-          
+
           // Update alert status in database for all alerts in the group
-          const alertIds = alertGroup.map(alert => alert.id);
+          const alertIds = alertGroup.map((alert) => alert.id);
           await prisma.alert.updateMany({
             where: { id: { in: alertIds } },
             data: { isPosted: true },
           });
-          
+
           processed += alertGroup.length;
-          messages.push(`Successfully posted ${alertGroup.length} alerts with header "${headerText}"`);
+          messages.push(
+            `Successfully posted ${alertGroup.length} alerts with header "${headerText}"`
+          );
         } else {
           // Fallback to individual posting if page is not available
-          console.log("Page not available, using individual posting as fallback");
+          console.log(
+            "Page not available, using individual posting as fallback"
+          );
           const result = await writeAndPostTweet(tweetContent);
-          
+
           if (result.success) {
-            const alertIds = alertGroup.map(alert => alert.id);
+            const alertIds = alertGroup.map((alert) => alert.id);
             await prisma.alert.updateMany({
               where: { id: { in: alertIds } },
               data: { isPosted: true },
             });
             processed += alertGroup.length;
-            messages.push(`Successfully posted ${alertGroup.length} alerts with header "${headerText}"`);
+            messages.push(
+              `Successfully posted ${alertGroup.length} alerts with header "${headerText}"`
+            );
           } else {
             failed += alertGroup.length;
-            messages.push(`Failed to post ${alertGroup.length} alerts with header "${headerText}": ${result.message}`);
+            messages.push(
+              `Failed to post ${alertGroup.length} alerts with header "${headerText}": ${result.message}`
+            );
           }
         }
-        
+
         // Wait between posts to avoid rate limits
         await wait(500);
       } catch (error) {
         failed += alertGroup.length;
-        messages.push(`Error posting alerts with header "${headerText}": ${error instanceof Error ? error.message : String(error)}`);
+        messages.push(
+          `Error posting alerts with header "${headerText}": ${
+            error instanceof Error ? error.message : String(error)
+          }`
+        );
       }
     }
-    
+
     return {
       success: failed === 0,
       loginMessage: loginResult.message,
       processed,
       failed,
-      messages
+      messages,
     };
   } catch (error) {
     console.error("Error in postToTwitter:", error);
@@ -977,7 +1005,11 @@ export const postToTwitter = async (): Promise<{
       loginMessage: loginResult ? loginResult.message : "Login not attempted",
       processed: 0,
       failed: 0,
-      messages: [`Error in postToTwitter: ${error instanceof Error ? error.message : String(error)}`]
+      messages: [
+        `Error in postToTwitter: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      ],
     };
   } finally {
     // Close browser and page
@@ -985,7 +1017,7 @@ export const postToTwitter = async (): Promise<{
       await loginResult.page.close();
       console.log("Page closed");
     }
-    
+
     if (loginResult?.browser) {
       await loginResult.browser.close();
       console.log("Browser closed");
