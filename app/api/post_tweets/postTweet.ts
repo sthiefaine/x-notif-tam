@@ -516,6 +516,27 @@ const getCauseEmoji = (cause: string, isResolution: boolean = false): string => 
   }
 };
 
+
+/**
+ * Formats a date to HH:MM format in Paris timezone
+ * @param date The date to format
+ * @returns Formatted time string in Paris timezone
+ */
+const formatTimeInParis = (date: Date): string => {
+  const formatter = new Intl.DateTimeFormat('fr-FR', {
+    timeZone: 'Europe/Paris',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false
+  });
+  
+  const parts = formatter.formatToParts(date);
+  const hour = parts.find(part => part.type === 'hour')?.value || '00';
+  const minute = parts.find(part => part.type === 'minute')?.value || '00';
+  
+  return `${hour.padStart(2, '0')}:${minute.padStart(2, '0')}`;
+};
+
 /**
  * Formats a date to HH:MM format
  * @param date The date to format
@@ -588,7 +609,7 @@ export const formatTweetFromAlertGroup = (alerts: Alert[]): string => {
   });
   
   // Get start time from the first alert (they should be sorted by time)
-  const startTime = formatTime(alerts[0].timeStart);
+  const startTime = formatTimeInParis(alerts[0].timeStart);
   
   // Build the tweet
   let tweet = '';
