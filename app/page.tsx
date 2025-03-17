@@ -56,7 +56,7 @@ export default async function Home() {
               <Link
                 href="https://github.com/sthiefaine/x-notif-tam"
                 className="button"
-                style={{ backgroundColor: "#24292e", color: "white" }}
+                style={{ backgroundColor: "#24292e", color: "white", zIndex: 20 }}
               >
                 <span
                   style={{
