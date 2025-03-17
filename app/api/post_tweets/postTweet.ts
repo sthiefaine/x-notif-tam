@@ -483,7 +483,7 @@ const getCauseEmoji = (
   cause: string,
   isResolution: boolean = false
 ): string => {
-  if (isResolution) return "";
+  if (isResolution) return "🟢";
 
   switch (cause) {
     case "TECHNICAL_PROBLEM":
@@ -577,7 +577,8 @@ export const formatTweetFromAlertGroup = (alerts: Alert[]): string => {
   const isResolution =
     headerText.toLowerCase().includes("reprise") ||
     headerText.toLowerCase().includes("résolution") ||
-    headerText.toLowerCase().includes("fin d'incident");
+    headerText.toLowerCase().includes("fin d'incident") ||
+    headerText.toLowerCase().includes("fin alerte");
 
   // Get all unique route IDs from the group
   const allRouteIds = new Set<string>();
@@ -619,7 +620,7 @@ export const formatTweetFromAlertGroup = (alerts: Alert[]): string => {
   // Add cause emoji and tramway emoji if applicable
   const causeEmoji = getCauseEmoji(alerts[0].cause, isResolution);
   if (causeEmoji) tweet += `${causeEmoji} `;
-  if (hasTramway && !isResolution) tweet += Math.random() < 0.5 ? "🚊 " : "🚋 ";
+  if (hasTramway) tweet += Math.random() < 0.5 ? "🚊 " : "🚋 ";
 
   // Add header and time
   tweet += `${startTime}\n`;
