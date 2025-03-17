@@ -31,7 +31,7 @@ export async function GET(request: NextRequest) {
       where: {
         isPosted: false,
         timeStart: {
-          gte: new Date(new Date().setHours(0, 0, 0, 0)), // Aujourd'hui
+          gte: new Date(new Date().setHours(0, 0, 0, 0)),
         },
       },
     });
@@ -68,9 +68,6 @@ export async function GET(request: NextRequest) {
       console.log("Post result:", postResult);
     }
 
-    console.log("================================");
-
-    // Construire la réponse
     const response = {
       success: true,
       unpostedAlerts: unpostedCount,

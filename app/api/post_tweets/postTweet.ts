@@ -295,11 +295,10 @@ export const enterTweetContent = async (
 export const submitTweet = async (page: Page): Promise<boolean> => {
   console.log("Submitting tweet");
   try {
-    // Essayer différents sélecteurs pour le bouton de tweet
     const buttonSelectors = [
-      'div[data-testid="tweetButton"]',
       'button[data-testid="tweetButton"]',
       'div[data-testid="tweetButtonInline"]',
+      'div[data-testid="tweetButton"]',
     ];
 
     for (const selector of buttonSelectors) {
@@ -323,7 +322,6 @@ export const submitTweet = async (page: Page): Promise<boolean> => {
           try {
             await page.waitForNavigation({ timeout: 500 });
           } catch (error) {
-            // Timeout de navigation pas critique - Twitter peut ne pas naviguer après l'envoi
             console.log(
               "Navigation timeout after posting tweet, but this might be normal"
             );
