@@ -299,7 +299,7 @@ export const submitTweet = async (page: Page): Promise<boolean> => {
 
     for (const selector of buttonSelectors) {
       try {
-        await page.waitForSelector(selector, { timeout: 5000 });
+        await page.waitForSelector(selector, { timeout: 4000 });
 
         // Vérifier si le bouton est désactivé
         const isDisabled = await page.evaluate((sel) => {
@@ -627,7 +627,7 @@ export const formatTweetFromAlertGroup = (alerts: Alert[]): string => {
     sortedRoutes.length > 1
       ? `Lignes: ${sortedRoutes.join("-")}\n`
       : `Ligne: ${sortedRoutes[0]}\n`;
-  tweet += `${alerts[0].descriptionText}\n\n`;
+  tweet += `${alerts[0].descriptionText}\n`;
   tweet += sortedRoutes.length > 1 ? `#Montpellier` : `#L${sortedRoutes[0]}TaM`;
 
   // Twitter has a 280 character limit
@@ -675,7 +675,7 @@ export const writeAndPostTweet = async (
     }
 
     // Attendre un moment pour que le contenu soit bien enregistré
-    await wait(500);
+    await wait(200);
 
     // Soumettre le tweet
     const submitted = await submitTweet(page);
