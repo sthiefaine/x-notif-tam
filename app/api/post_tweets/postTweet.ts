@@ -1,4 +1,3 @@
-export const maxDuration = 300;
 import puppeteer, { KnownDevices, Browser, Page } from "puppeteer-core";
 import chromium from "@sparticuz/chromium-min";
 import { prisma } from "@/lib/prisma";
@@ -45,7 +44,13 @@ export const launchBrowser = async (): Promise<Browser> => {
     "--no-zygote",
     "--single-process",
     "--disable-gpu",
+    "--disable-blink-features=AutomationControlled",
   ];
+
+  const puppeteerExtraArgs = {
+    ignoreDefaultArgs: ["--enable-automation"],
+    ignoreHTTPSErrors: true,
+  };
 
   console.log("Launching browser");
   return await puppeteer.launch({
@@ -53,7 +58,8 @@ export const launchBrowser = async (): Promise<Browser> => {
     executablePath: isDev
       ? localExecutablePath
       : await chromium.executablePath(remoteExecutablePath),
-    headless: isDev ? false : true,
+    headless: isDev ? false : "new",
+    ...puppeteerExtraArgs,
   });
 };
 
@@ -106,7 +112,7 @@ export const goToComposeTweet = async (page: Page): Promise<boolean> => {
   try {
     await page.goto("https://x.com/compose/post", {
       waitUntil: "domcontentloaded",
-      timeout: 2000,
+      timeout: 4000,
     });
     console.log("Compose tweet page loaded");
     return true;
@@ -125,12 +131,10 @@ export const performLogin = async (page: Page): Promise<string> => {
   console.log("Performing login");
   try {
     // Attendre que la page soit stable
-    await page.waitForNetworkIdle({ idleTime: 1000 });
-
+    await page.waitForNetworkIdle({ idleTime: 10000 });
     // Saisir l'email
-    const usernameSelector =
-      'input[name="text"], input[autocomplete="username"]';
-    await page.waitForSelector(usernameSelector, { timeout: 6000 });
+    const usernameSelector = 'input[name="text"]';
+    await page.waitForSelector(usernameSelector, { timeout: 2000 });
 
     const usernameInput = await page.$(usernameSelector);
     if (!usernameInput) throw new Error("Username input field not found");
@@ -140,17 +144,20 @@ export const performLogin = async (page: Page): Promise<string> => {
     await page.evaluate(() =>
       (document.querySelector("button:nth-child(6)") as HTMLElement).click()
     );
-    console.log("Username submitted");
 
+    console.log("Username submitted");
+    await wait(2000);
+
+    console.log("Current URL after username:", page.url());
     // Vérifier si une étape supplémentaire est nécessaire
-    await page.waitForNetworkIdle({ idleTime: 1000 });
-    const pageText = await page.$eval("*", (el) => el.textContent);
+    console.log("Network idle, checking for additional verification");
+    const pageText = (await page.$eval("*", (el) => el.textContent)) || "";
     if (
-      pageText &&
-      (pageText.includes("username") || pageText.includes("utilisateur"))
+      pageText.includes("utilisateur") ||
+      pageText.includes("username")
     ) {
       console.log("Additional verification required");
-      await page.waitForSelector('input[name="text"]', { timeout: 6000 });
+      await page.waitForSelector('input[name="text"]', { timeout: 4000 });
       const verificationInput = await page.$('input[name="text"]');
       if (!verificationInput)
         throw new Error("Verification input field not found");
@@ -162,22 +169,44 @@ export const performLogin = async (page: Page): Promise<string> => {
     }
 
     // Saisir le mot de passe
-    const passwordSelector =
-      'input[name="password"], input[autocomplete="current-password"]';
-    await page.waitForSelector(passwordSelector, { timeout: 6000 });
+    console.log("Waiting for password input");
 
-    const passwordInput = await page.$(passwordSelector);
-    if (!passwordInput) throw new Error("Password input field not found");
-    await passwordInput.type(process.env.USER_PASSWORD || "", { delay: 10 });
+    const passwordSelectors = [
+      'input[name="password"]', 
+      'input[autocomplete="current-password"]',
+      'input[type="password"]'
+    ];
+
+    let passwordInput = null;
+    for (const selector of passwordSelectors) {
+      try {
+        console.log(`Trying password selector: ${selector}`);
+        await page.waitForSelector(selector, { timeout: 40000 });
+        passwordInput = await page.$(selector);
+        if (passwordInput) {
+          console.log(`Found password input with selector: ${selector}`);
+          break;
+        }
+      } catch (e) {
+        console.log(`Selector ${selector} not found`);
+      }
+    }
+    
+    if (!passwordInput) {
+      throw new Error("Password input field not found after trying multiple selectors");
+    }
+  
+    await passwordInput.type(process.env.USER_PASSWORD || "", { delay: 150 });
+    console.log("Password entered, pressing Enter");
     await page.keyboard.press("Enter");
-    console.log("Password submitted");
+    
+    // Wait longer for login to complete
+    console.log("Password submitted, waiting for navigation");
+    await wait(18000);
 
-    // Attendre la fin de la connexion
-    await page.waitForNetworkIdle({ idleTime: 1000 });
-
-    // Vérifier si connecté
     const currentUrl = page.url();
-    console.log("Current URL after login:", currentUrl);
+    console.log("Current URL after login attempt:", currentUrl);
+
     if (currentUrl === "https://x.com/home") {
       console.log("Login successful");
 
