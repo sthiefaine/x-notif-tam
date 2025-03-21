@@ -60,6 +60,7 @@ export const launchBrowser = async (): Promise<Browser> => {
       : await chromium.executablePath(remoteExecutablePath),
     headless: isDev ? false : "new",
     ...puppeteerExtraArgs,
+        waitForInitialPage: false,
   });
 };
 
@@ -74,6 +75,13 @@ export const configurePage = async (page: Page): Promise<Page> => {
     "Mozilla/5.0 (iPhone; CPU iPhone OS 17_5_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) CriOS/125.0.6422.80 Mobile/15E148 Safari/604.1";
   await page.setUserAgent(userAgent);
   await page.emulate(device);
+
+    await page.setExtraHTTPHeaders({
+    "Accept-Language": "fr-FR,fr;q=0.9,en-US;q=0.8,en;q=0.7",
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8",
+    "Accept-Encoding": "gzip, deflate, br",
+  });
+
   return page;
 };
 
@@ -85,7 +93,8 @@ export const configurePage = async (page: Page): Promise<Page> => {
 export const checkExistingLogin = async (page: Page): Promise<boolean> => {
   console.log("Checking existing login");
   try {
-    await page.goto("https://x.com/home", { waitUntil: "domcontentloaded" });
+    await page.goto("https://x.com/home", { waitUntil: "domcontentloaded", timeout: 40000, });
+    await wait(1000);
     const currentUrl = page.url();
     const isLoggedIn = currentUrl === "https://x.com/home";
 
@@ -112,7 +121,6 @@ export const goToComposeTweet = async (page: Page): Promise<boolean> => {
   try {
     await page.goto("https://x.com/compose/post", {
       waitUntil: "domcontentloaded",
-      timeout: 4000,
     });
     console.log("Compose tweet page loaded");
     return true;
@@ -130,15 +138,27 @@ export const goToComposeTweet = async (page: Page): Promise<boolean> => {
 export const performLogin = async (page: Page): Promise<string> => {
   console.log("Performing login");
   try {
-    // Attendre que la page soit stable
-    await page.waitForNetworkIdle({ idleTime: 10000 });
+
+    await page.evaluate(() => {
+      return new Promise((resolve) => {
+        if (document.readyState === "complete") {
+          resolve(true);
+        } else {
+          window.addEventListener("load", () => resolve(true));
+        }
+      });
+    });
+
+    // Attendre un moment pour que tout contenu dynamique se charge
+    await wait(2000);
     // Saisir l'email
     const usernameSelector = 'input[name="text"]';
-    await page.waitForSelector(usernameSelector, { timeout: 2000 });
-
-    const usernameInput = await page.$(usernameSelector);
-    if (!usernameInput) throw new Error("Username input field not found");
-    await usernameInput.type(process.env.USER_EMAIL || "", { delay: 50 });
+    const usernameVisible = await page.waitForSelector(usernameSelector, {
+      visible: true,
+      timeout: 20000,
+    });
+    if (!usernameVisible) throw new Error("Username input field not found");
+    await usernameVisible.type(process.env.USER_EMAIL || "", { delay: 50 });
 
     // Cliquer sur "Suivant"
     await page.evaluate(() =>
@@ -152,10 +172,7 @@ export const performLogin = async (page: Page): Promise<string> => {
     // Vérifier si une étape supplémentaire est nécessaire
     console.log("Network idle, checking for additional verification");
     const pageText = (await page.$eval("*", (el) => el.textContent)) || "";
-    if (
-      pageText.includes("utilisateur") ||
-      pageText.includes("username")
-    ) {
+    if (pageText.includes("utilisateur") || pageText.includes("username")) {
       console.log("Additional verification required");
       await page.waitForSelector('input[name="text"]', { timeout: 4000 });
       const verificationInput = await page.$('input[name="text"]');
@@ -172,9 +189,9 @@ export const performLogin = async (page: Page): Promise<string> => {
     console.log("Waiting for password input");
 
     const passwordSelectors = [
-      'input[name="password"]', 
+      'input[name="password"]',
       'input[autocomplete="current-password"]',
-      'input[type="password"]'
+      'input[type="password"]',
     ];
 
     let passwordInput = null;
@@ -191,15 +208,17 @@ export const performLogin = async (page: Page): Promise<string> => {
         console.log(`Selector ${selector} not found`);
       }
     }
-    
+
     if (!passwordInput) {
-      throw new Error("Password input field not found after trying multiple selectors");
+      throw new Error(
+        "Password input field not found after trying multiple selectors"
+      );
     }
-  
+
     await passwordInput.type(process.env.USER_PASSWORD || "", { delay: 150 });
     console.log("Password entered, pressing Enter");
     await page.keyboard.press("Enter");
-    
+
     // Wait longer for login to complete
     console.log("Password submitted, waiting for navigation");
     await wait(18000);
