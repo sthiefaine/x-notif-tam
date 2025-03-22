@@ -42,9 +42,13 @@ export const launchBrowser = async (): Promise<Browser> => {
     "--disable-accelerated-2d-canvas",
     "--no-first-run",
     "--no-zygote",
-    "--single-process",
-    "--disable-gpu",
     "--disable-blink-features=AutomationControlled",
+    "--disable-extensions",
+    "--disable-component-extensions-with-background-pages",
+    "--disable-default-apps",
+    "--mute-audio",
+    "--disable-backgrounding-occluded-windows",
+    "--disable-notifications",
   ];
 
   const puppeteerExtraArgs = {
@@ -60,7 +64,7 @@ export const launchBrowser = async (): Promise<Browser> => {
       : await chromium.executablePath(remoteExecutablePath),
     headless: isDev ? false : "new",
     ...puppeteerExtraArgs,
-        waitForInitialPage: false,
+    waitForInitialPage: false,
   });
 };
 
@@ -76,9 +80,10 @@ export const configurePage = async (page: Page): Promise<Page> => {
   await page.setUserAgent(userAgent);
   await page.emulate(device);
 
-    await page.setExtraHTTPHeaders({
+  await page.setExtraHTTPHeaders({
     "Accept-Language": "fr-FR,fr;q=0.9,en-US;q=0.8,en;q=0.7",
-    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8",
+    Accept:
+      "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8",
     "Accept-Encoding": "gzip, deflate, br",
   });
 
@@ -93,7 +98,10 @@ export const configurePage = async (page: Page): Promise<Page> => {
 export const checkExistingLogin = async (page: Page): Promise<boolean> => {
   console.log("Checking existing login");
   try {
-    await page.goto("https://x.com/home", { waitUntil: "domcontentloaded", timeout: 40000, });
+    await page.goto("https://x.com/home", {
+      waitUntil: "domcontentloaded",
+      timeout: 40000,
+    });
     await wait(1000);
     const currentUrl = page.url();
     const isLoggedIn = currentUrl === "https://x.com/home";
@@ -138,7 +146,6 @@ export const goToComposeTweet = async (page: Page): Promise<boolean> => {
 export const performLogin = async (page: Page): Promise<string> => {
   console.log("Performing login");
   try {
-
     await page.evaluate(() => {
       return new Promise((resolve) => {
         if (document.readyState === "complete") {
