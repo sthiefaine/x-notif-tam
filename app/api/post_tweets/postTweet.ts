@@ -12,7 +12,7 @@ const localExecutablePath =
     : "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
 
 const remoteExecutablePath =
-  "https://github.com/Sparticuz/chromium/releases/download/v119.0.2/chromium-v119.0.2-pack.tar";
+  "https://github.com/Sparticuz/chromium/releases/download/v122.0.0/chromium-v122.0.0-pack.tar";
 
 const isDev = process.env.NODE_ENV === "development";
 const urlLogin = "https://x.com/i/flow/login";
@@ -36,23 +36,21 @@ const wait = (ms: number): Promise<void> =>
  */
 export const launchBrowser = async (): Promise<Browser> => {
   const serverlessArgs = [
+    "--disable-image-loading",
     "--no-sandbox",
     "--disable-setuid-sandbox",
     "--disable-dev-shm-usage",
-    "--disable-accelerated-2d-canvas",
-    "--no-first-run",
+    "--disable-gpu",
+    "--single-process",
     "--no-zygote",
-    "--disable-blink-features=AutomationControlled",
     "--disable-extensions",
-    "--disable-component-extensions-with-background-pages",
-    "--disable-default-apps",
-    "--mute-audio",
-    "--disable-backgrounding-occluded-windows",
-    "--disable-notifications",
+    "--disable-software-rasterizer",
+    "--disable-features=site-per-process",
+    "--disable-features=IsolateOrigins,site-per-process",
+    "--disable-site-isolation-trials"
   ];
 
   const puppeteerExtraArgs = {
-    ignoreDefaultArgs: ["--enable-automation"],
     ignoreHTTPSErrors: true,
   };
 
@@ -64,7 +62,6 @@ export const launchBrowser = async (): Promise<Browser> => {
       : await chromium.executablePath(remoteExecutablePath),
     headless: isDev ? false : "new",
     ...puppeteerExtraArgs,
-    waitForInitialPage: false,
   });
 };
 
@@ -79,14 +76,6 @@ export const configurePage = async (page: Page): Promise<Page> => {
     "Mozilla/5.0 (iPhone; CPU iPhone OS 17_5_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) CriOS/125.0.6422.80 Mobile/15E148 Safari/604.1";
   await page.setUserAgent(userAgent);
   await page.emulate(device);
-
-  await page.setExtraHTTPHeaders({
-    "Accept-Language": "fr-FR,fr;q=0.9,en-US;q=0.8,en;q=0.7",
-    Accept:
-      "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8",
-    "Accept-Encoding": "gzip, deflate, br",
-  });
-
   return page;
 };
 
@@ -100,9 +89,9 @@ export const checkExistingLogin = async (page: Page): Promise<boolean> => {
   try {
     await page.goto("https://x.com/home", {
       waitUntil: "domcontentloaded",
-      timeout: 40000,
+      timeout: 20000,
     });
-    await wait(1000);
+    await wait(800);
     const currentUrl = page.url();
     const isLoggedIn = currentUrl === "https://x.com/home";
 
@@ -126,10 +115,13 @@ export const checkExistingLogin = async (page: Page): Promise<boolean> => {
  */
 export const goToComposeTweet = async (page: Page): Promise<boolean> => {
   console.log("Navigating to compose tweet page");
+
   try {
     await page.goto("https://x.com/compose/post", {
       waitUntil: "domcontentloaded",
+      timeout: 10000,
     });
+    await wait(300);
     console.log("Compose tweet page loaded");
     return true;
   } catch (error) {
@@ -157,7 +149,7 @@ export const performLogin = async (page: Page): Promise<string> => {
     });
 
     // Attendre un moment pour que tout contenu dynamique se charge
-    await wait(2000);
+    await wait(3000);
     // Saisir l'email
     const usernameSelector = 'input[name="text"]';
     const usernameVisible = await page.waitForSelector(usernameSelector, {
@@ -181,15 +173,20 @@ export const performLogin = async (page: Page): Promise<string> => {
     const pageText = (await page.$eval("*", (el) => el.textContent)) || "";
     if (pageText.includes("utilisateur") || pageText.includes("username")) {
       console.log("Additional verification required");
-      await page.waitForSelector('input[name="text"]', { timeout: 4000 });
-      const verificationInput = await page.$('input[name="text"]');
-      if (!verificationInput)
-        throw new Error("Verification input field not found");
-      await verificationInput.type(process.env.USER_HANDLE || "", {
-        delay: 50,
+      await wait(3000);
+      const selector = 'input[autocomplete=on]';
+      const usernameVisible = await page.waitForSelector(selector, {
+        visible: true,
+        timeout: 40000,
       });
+      if (!usernameVisible) throw new Error("Username input field not found");
+      await usernameVisible.type(process.env.USER_HANDLE || "", { delay: 100 });
+      console.log("Username entered");
+
+      await wait(3000);
+      console.log("Pressing Enter");
       await page.keyboard.press("Enter");
-      await wait(500);
+      await wait(1000);
     }
 
     // Saisir le mot de passe
@@ -290,7 +287,6 @@ export const enterTweetContent = async (
   console.log("Entering tweet content");
 
   try {
-    // Essayer différentes méthodes pour entrer le texte
     const selector = [
       'textarea[autocapitalize="sentences"][autocomplete="on"][data-testid="tweetTextarea_0"]',
     ];
@@ -300,6 +296,7 @@ export const enterTweetContent = async (
         visible: true,
         timeout: 0,
       });
+      await wait(1000);
       console.log(`Found tweet input with selector: ${selector}`);
 
       if (selector.includes("RichTextInputContainer")) {
