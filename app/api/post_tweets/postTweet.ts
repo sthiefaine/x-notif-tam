@@ -36,23 +36,10 @@ const wait = (ms: number): Promise<void> =>
  */
 export const launchBrowser = async (): Promise<Browser> => {
   const serverlessArgs = [
-    "--no-sandbox",
-    "--disable-setuid-sandbox",
-    "--disable-dev-shm-usage",
-    "--disable-accelerated-2d-canvas",
-    "--no-first-run",
-    "--no-zygote",
-    "--disable-blink-features=AutomationControlled",
-    "--disable-extensions",
-    "--disable-component-extensions-with-background-pages",
-    "--disable-default-apps",
-    "--mute-audio",
-    "--disable-backgrounding-occluded-windows",
-    "--disable-notifications",
+    "--disable-image-loading",
   ];
 
   const puppeteerExtraArgs = {
-    ignoreDefaultArgs: ["--enable-automation"],
     ignoreHTTPSErrors: true,
   };
 
@@ -79,14 +66,6 @@ export const configurePage = async (page: Page): Promise<Page> => {
     "Mozilla/5.0 (iPhone; CPU iPhone OS 17_5_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) CriOS/125.0.6422.80 Mobile/15E148 Safari/604.1";
   await page.setUserAgent(userAgent);
   await page.emulate(device);
-
-  await page.setExtraHTTPHeaders({
-    "Accept-Language": "fr-FR,fr;q=0.9,en-US;q=0.8,en;q=0.7",
-    Accept:
-      "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8",
-    "Accept-Encoding": "gzip, deflate, br",
-  });
-
   return page;
 };
 
@@ -100,9 +79,9 @@ export const checkExistingLogin = async (page: Page): Promise<boolean> => {
   try {
     await page.goto("https://x.com/home", {
       waitUntil: "domcontentloaded",
-      timeout: 40000,
+      timeout: 20000,
     });
-    await wait(1000);
+    await wait(800);
     const currentUrl = page.url();
     const isLoggedIn = currentUrl === "https://x.com/home";
 
@@ -126,10 +105,13 @@ export const checkExistingLogin = async (page: Page): Promise<boolean> => {
  */
 export const goToComposeTweet = async (page: Page): Promise<boolean> => {
   console.log("Navigating to compose tweet page");
+  
   try {
     await page.goto("https://x.com/compose/post", {
       waitUntil: "domcontentloaded",
+      timeout: 10000,
     });
+    await wait(300);
     console.log("Compose tweet page loaded");
     return true;
   } catch (error) {
@@ -290,7 +272,6 @@ export const enterTweetContent = async (
   console.log("Entering tweet content");
 
   try {
-    // Essayer différentes méthodes pour entrer le texte
     const selector = [
       'textarea[autocapitalize="sentences"][autocomplete="on"][data-testid="tweetTextarea_0"]',
     ];
@@ -300,6 +281,7 @@ export const enterTweetContent = async (
         visible: true,
         timeout: 0,
       });
+      await wait(1000);
       console.log(`Found tweet input with selector: ${selector}`);
 
       if (selector.includes("RichTextInputContainer")) {
