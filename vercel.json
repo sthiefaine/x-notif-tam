@@ -16,6 +16,10 @@
     {
       "path": "/api/refresh_session",
       "schedule": "0 3 * * *"
+    },
+    {
+      "path": "/api/reload_session",
+      "schedule": "0 4 * * 0"
     }
   ]
 }
