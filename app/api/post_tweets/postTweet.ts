@@ -448,6 +448,14 @@ export const loginToTwitter = async (): Promise<{
         };
       } else {
         console.log("Existing session invalid, performing new login");
+        // Supprimer la session invalide
+        await prisma.xSession.delete({
+          where: {
+            id: previousSession.id,
+          },
+        });
+        console.log("Invalid session deleted from database");
+        
         const loginResult = await goToLogin(page);
         const success = loginResult.includes("Login successful");
 
@@ -455,7 +463,7 @@ export const loginToTwitter = async (): Promise<{
           // Sauvegarder les cookies pour les sessions futures
           const cookies = await page.cookies();
           const sessionExpiry = new Date();
-          sessionExpiry.setHours(sessionExpiry.getHours() + 24);
+          sessionExpiry.setHours(sessionExpiry.getHours() + 168);
 
           await prisma.xSession.create({
             data: {

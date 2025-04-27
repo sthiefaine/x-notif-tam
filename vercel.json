@@ -15,7 +15,7 @@
     },
     {
       "path": "/api/refresh_session",
-      "schedule": "0 1 * * *"
+      "schedule": "0 3 * * *"
     }
   ]
 }
