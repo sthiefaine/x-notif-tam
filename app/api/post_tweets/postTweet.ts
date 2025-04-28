@@ -613,15 +613,27 @@ const formatTime = (date: Date): string => {
 export const groupAlertsByHeader = (
   alerts: Alert[]
 ): Record<string, Alert[]> => {
+  console.log("=== Début de groupAlertsByHeader ===");
+  console.log("Nombre d'alertes à grouper:", alerts.length);
   const grouped: Record<string, Alert[]> = {};
 
   for (const alert of alerts) {
+    console.log(`Traitement de l'alerte ${alert.id} avec header: "${alert.headerText}"`);
     if (!grouped[alert.headerText]) {
       grouped[alert.headerText] = [];
     }
     grouped[alert.headerText].push(alert);
   }
 
+  // Log des groupes formés
+  console.log("Groupes formés:");
+  Object.entries(grouped).forEach(([header, alerts]) => {
+    console.log(`- Header: "${header}"`);
+    console.log(`  Nombre d'alertes: ${alerts.length}`);
+    console.log(`  IDs des alertes: ${alerts.map(a => a.id).join(", ")}`);
+  });
+
+  console.log("=== Fin de groupAlertsByHeader ===");
   return grouped;
 };
 
@@ -744,6 +756,21 @@ export const writeAndPostTweet = async (
       throw new Error("Failed to submit tweet");
     }
 
+    // Vérifier que le tweet a bien été posté en attendant la redirection
+    try {
+      await page.waitForNavigation({ timeout: 5000 });
+      const currentUrl = page.url();
+      if (!currentUrl.includes("home") && !currentUrl.includes("compose")) {
+        throw new Error("Tweet submission did not redirect to expected page");
+      }
+    } catch (error) {
+      console.error("Error verifying tweet submission:", error);
+      return {
+        success: false,
+        message: "Failed to verify tweet was posted",
+      };
+    }
+
     return { success: true, message: "Tweet posted successfully" };
   } catch (error) {
     console.error("Error posting tweet:", error);
@@ -795,6 +822,8 @@ export const postTweet = async (
       console.error("Error updating alert status:", error);
       // Ne pas considérer l'échec de mise à jour comme un échec du tweet
     }
+  } else {
+    console.error(`Failed to post tweet for alert ${alert.id}: ${result.message}`);
   }
 
   return result;
@@ -860,6 +889,7 @@ export const processUnpostedAlerts = async (): Promise<{
       if (result.success) {
         // Mettre à jour tous les alertes du groupe comme postées
         const alertIds = alertGroup.map((alert) => alert.id);
+        console.log(`Mise à jour du statut isPosted pour les alertes: ${alertIds.join(", ")}`);
         await prisma.alert.updateMany({
           where: { id: { in: alertIds } },
           data: { isPosted: true },
@@ -939,7 +969,7 @@ export const postToTwitter = async (): Promise<{
           gte: new Date(new Date().setHours(0, 0, 0, 0)), // Today
         },
       },
-      orderBy: [{ headerText: "asc" }, { timeStart: "asc" }],
+      orderBy: { timeStart: "asc" },
       take: 20, // Increased limit to handle grouping
     });
 
@@ -1006,6 +1036,7 @@ export const postToTwitter = async (): Promise<{
 
           // Update alert status in database for all alerts in the group
           const alertIds = alertGroup.map((alert) => alert.id);
+          console.log(`Mise à jour du statut isPosted pour les alertes: ${alertIds.join(", ")}`);
           await prisma.alert.updateMany({
             where: { id: { in: alertIds } },
             data: { isPosted: true },
@@ -1024,6 +1055,7 @@ export const postToTwitter = async (): Promise<{
 
           if (result.success) {
             const alertIds = alertGroup.map((alert) => alert.id);
+            console.log(`Mise à jour du statut isPosted pour les alertes: ${alertIds.join(", ")}`);
             await prisma.alert.updateMany({
               where: { id: { in: alertIds } },
               data: { isPosted: true },

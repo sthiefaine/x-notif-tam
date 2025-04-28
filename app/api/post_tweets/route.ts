@@ -35,6 +35,7 @@ export async function GET(request: NextRequest) {
         },
       },
     });
+    console.log('unpostedCount', unpostedCount);
 
     // Tester le formatage des tweets si demandé
     let formattedTweets = null;
@@ -72,8 +73,8 @@ export async function GET(request: NextRequest) {
       success: true,
       unpostedAlerts: unpostedCount,
       dryRun: dryRun || false,
-      formattedTweets: formattedTweets,
-      postingResult: postResult,
+      formattedTweets: formattedTweets || null,
+      postingResult: postResult || null,
       debug: debug
         ? {
             environment: process.env.NODE_ENV,
