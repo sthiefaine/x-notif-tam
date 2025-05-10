@@ -32,6 +32,7 @@ export async function GET(request: NextRequest) {
         isPosted: false,
         timeStart: {
           gte: new Date(new Date().setHours(0, 0, 0, 0)),
+          lte: new Date(new Date().setHours(23, 59, 59, 999)),
         },
       },
     });

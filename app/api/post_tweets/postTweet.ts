@@ -967,6 +967,7 @@ export const postToTwitter = async (): Promise<{
         isPosted: false,
         timeStart: {
           gte: new Date(new Date().setHours(0, 0, 0, 0)), // Today
+          lte: new Date(new Date().setHours(23, 59, 59, 999)),
         },
       },
       orderBy: { timeStart: "asc" },
