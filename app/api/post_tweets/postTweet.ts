@@ -696,12 +696,20 @@ export const formatTweetFromAlertGroup = (alerts: Alert[]): string => {
 
   // Add header and time
   tweet += `${startTime}\n`;
-  tweet +=
-    sortedRoutes.length > 1
+  if (sortedRoutes.length > 0) {
+    tweet += sortedRoutes.length > 1
       ? `Lignes: ${sortedRoutes.join("-")}\n`
       : `Ligne: ${sortedRoutes[0]}\n`;
+  }
+
   tweet += `${alerts[0].descriptionText}\n`;
-  tweet += sortedRoutes.length > 1 ? `#Montpellier` : `#L${sortedRoutes[0]}TaM`;
+  if (sortedRoutes.length > 1) {
+    tweet += "#Montpellier";
+  } else if (sortedRoutes.length === 1) {
+    tweet += `#L${sortedRoutes[0]}TaM #Montpellier`;
+  } else {
+    tweet += "#Montpellier";
+  }
 
   // Twitter has a 280 character limit
   if (tweet.length > 280) {
