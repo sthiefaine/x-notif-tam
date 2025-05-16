@@ -21,6 +21,23 @@ export async function GET(request: NextRequest) {
         status: 401,
       });
     }
+
+    const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
+    const stuckAlerts = await prisma.alert.updateMany({
+      where: {
+        isProcessing: true,
+        isPosted: false,
+        updatedAt: {
+          lt: fiveMinutesAgo
+        }
+      },
+      data: {
+        isProcessing: false
+      }
+    });
+
+    console.log(`Nettoyage de ${stuckAlerts.count} alertes bloquées`);
+
     // Lire les paramètres de requête
     const searchParams = request.nextUrl.searchParams;
     const debug = searchParams.get("debug") === "true";
@@ -30,6 +47,7 @@ export async function GET(request: NextRequest) {
     const unpostedCount = await prisma.alert.count({
       where: {
         isPosted: false,
+        isProcessing: false,
         timeStart: {
           gte: new Date(new Date().setHours(0, 0, 0, 0)),
           lte: new Date(new Date().setHours(23, 59, 59, 999)),
@@ -44,6 +62,7 @@ export async function GET(request: NextRequest) {
       const alerts = await prisma.alert.findMany({
         where: {
           isPosted: false,
+          isProcessing: false,
           timeStart: {
             gte: new Date(new Date().setHours(0, 0, 0, 0)),
           },

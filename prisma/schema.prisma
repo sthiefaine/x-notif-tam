@@ -40,6 +40,7 @@ model Alert {
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
   isPosted        Boolean   @default(false)
+  isProcessing    Boolean   @default(false)
   isComplement    Boolean   @default(false)
   parentAlertId   String?
   parentAlert     Alert?    @relation("AlertComplements", fields: [parentAlertId], references: [id])

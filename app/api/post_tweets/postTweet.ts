@@ -973,6 +973,7 @@ export const postToTwitter = async (): Promise<{
     const unpostedAlerts = await prisma.alert.findMany({
       where: {
         isPosted: false,
+        isProcessing: false,
         timeStart: {
           gte: new Date(new Date().setHours(0, 0, 0, 0)), // Today
           lte: new Date(new Date().setHours(23, 59, 59, 999)),
@@ -1000,6 +1001,13 @@ export const postToTwitter = async (): Promise<{
       };
     }
 
+    // Marquer les alertes comme en cours de traitement
+    const alertIds = unpostedAlerts.map(alert => alert.id);
+    await prisma.alert.updateMany({
+      where: { id: { in: alertIds } },
+      data: { isProcessing: true },
+    });
+
     // Step 3: Group alerts by header text
     const groupedAlerts = groupAlertsByHeader(unpostedAlerts);
     console.log(
@@ -1011,86 +1019,97 @@ export const postToTwitter = async (): Promise<{
     let processed = 0;
     let failed = 0;
 
-    for (const [headerText, alertGroup] of Object.entries(groupedAlerts)) {
-      console.log(
-        `Processing alert group with header: "${headerText}" (${alertGroup.length} alerts)`
-      );
+    try {
+      for (const [headerText, alertGroup] of Object.entries(groupedAlerts)) {
+        console.log(
+          `Processing alert group with header: "${headerText}" (${alertGroup.length} alerts)`
+        );
 
-      try {
-        // Format the tweet content for the group
-        const tweetContent = formatTweetFromAlertGroup(alertGroup);
+        try {
+          // Format the tweet content for the group
+          const tweetContent = formatTweetFromAlertGroup(alertGroup);
 
-        // Reuse the page from login if it exists
-        if (loginResult.page) {
-          // Navigate to compose tweet page if needed
-          await goToComposeTweet(loginResult.page);
+          // Reuse the page from login if it exists
+          if (loginResult.page) {
+            // Navigate to compose tweet page if needed
+            await goToComposeTweet(loginResult.page);
 
-          // Enter tweet content
-          const contentEntered = await enterTweetContent(
-            loginResult.page,
-            tweetContent
-          );
-          if (!contentEntered) {
-            throw new Error("Failed to enter tweet content");
-          }
+            // Enter tweet content
+            const contentEntered = await enterTweetContent(
+              loginResult.page,
+              tweetContent
+            );
+            if (!contentEntered) {
+              throw new Error("Failed to enter tweet content");
+            }
 
-          // Wait a moment for content to register
-          await wait(500);
+            // Wait a moment for content to register
+            await wait(500);
 
-          // Submit the tweet
-          const submitted = await submitTweet(loginResult.page);
-          if (!submitted) {
-            throw new Error("Failed to submit tweet");
-          }
+            // Submit the tweet
+            const submitted = await submitTweet(loginResult.page);
+            if (!submitted) {
+              throw new Error("Failed to submit tweet");
+            }
 
-          // Update alert status in database for all alerts in the group
-          const alertIds = alertGroup.map((alert) => alert.id);
-          console.log(`Mise à jour du statut isPosted pour les alertes: ${alertIds.join(", ")}`);
-          await prisma.alert.updateMany({
-            where: { id: { in: alertIds } },
-            data: { isPosted: true },
-          });
-
-          processed += alertGroup.length;
-          messages.push(
-            `Successfully posted ${alertGroup.length} alerts with header "${headerText}"`
-          );
-        } else {
-          // Fallback to individual posting if page is not available
-          console.log(
-            "Page not available, using individual posting as fallback"
-          );
-          const result = await writeAndPostTweet(tweetContent);
-
-          if (result.success) {
-            const alertIds = alertGroup.map((alert) => alert.id);
-            console.log(`Mise à jour du statut isPosted pour les alertes: ${alertIds.join(", ")}`);
+            // Update alert status in database for all alerts in the group
+            const groupAlertIds = alertGroup.map((alert) => alert.id);
             await prisma.alert.updateMany({
-              where: { id: { in: alertIds } },
-              data: { isPosted: true },
+              where: { id: { in: groupAlertIds } },
+              data: { isPosted: true, isProcessing: false },
             });
+
             processed += alertGroup.length;
             messages.push(
               `Successfully posted ${alertGroup.length} alerts with header "${headerText}"`
             );
           } else {
-            failed += alertGroup.length;
-            messages.push(
-              `Failed to post ${alertGroup.length} alerts with header "${headerText}": ${result.message}`
+            // Fallback to individual posting if page is not available
+            console.log(
+              "Page not available, using individual posting as fallback"
             );
-          }
-        }
+            const result = await writeAndPostTweet(tweetContent);
 
-        // Wait between posts to avoid rate limits
-        await wait(500);
-      } catch (error) {
-        failed += alertGroup.length;
-        messages.push(
-          `Error posting alerts with header "${headerText}": ${
-            error instanceof Error ? error.message : String(error)
-          }`
-        );
+            if (result.success) {
+              const groupAlertIds = alertGroup.map((alert) => alert.id);
+              await prisma.alert.updateMany({
+                where: { id: { in: groupAlertIds } },
+                data: { isPosted: true, isProcessing: false },
+              });
+              processed += alertGroup.length;
+              messages.push(
+                `Successfully posted ${alertGroup.length} alerts with header "${headerText}"`
+              );
+            } else {
+              failed += alertGroup.length;
+              messages.push(
+                `Failed to post ${alertGroup.length} alerts with header "${headerText}": ${result.message}`
+              );
+            }
+          }
+
+          // Wait between posts to avoid rate limits
+          await wait(500);
+        } catch (error) {
+          failed += alertGroup.length;
+          messages.push(
+            `Error posting alerts with header "${headerText}": ${
+              error instanceof Error ? error.message : String(error)
+            }`
+          );
+        }
       }
+    } catch (error) {
+      console.error("Error in postToTwitter:", error);
+      // En cas d'erreur générale, réinitialiser isProcessing pour toutes les alertes non traitées
+      await prisma.alert.updateMany({
+        where: { 
+          id: { in: alertIds },
+          isPosted: false 
+        },
+        data: { isProcessing: false },
+      });
+      throw error;
     }
 
     return {
