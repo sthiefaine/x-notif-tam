@@ -726,7 +726,8 @@ export const formatTweetFromAlertGroup = (alerts: Alert[]): string => {
  * @returns A result message and success status
  */
 export const writeAndPostTweet = async (
-  content: string
+  content: string,
+  alertIds?: string[]
 ): Promise<{ success: boolean; message: string }> => {
   console.log("Writing and posting tweet with content:", content);
   let loginResult;
@@ -752,6 +753,15 @@ export const writeAndPostTweet = async (
     // Entrer le contenu du tweet
     const contentEntered = await enterTweetContent(page, content);
     if (!contentEntered) {
+      // Réinitialiser isProcessing à false pour toutes les alertes non postées
+      await prisma.alert.updateMany({
+        where: { 
+          id: { in: alertIds || [] },
+          isPosted: false,
+          isProcessing: true
+        },
+        data: { isProcessing: false },
+      });
       throw new Error("Failed to enter tweet content");
     }
 
@@ -816,7 +826,7 @@ export const postTweet = async (
   const tweetContent = formatTweetFromAlertGroup([alert]);
 
   // Utiliser la fonction writeAndPostTweet pour publier le tweet
-  const result = await writeAndPostTweet(tweetContent);
+  const result = await writeAndPostTweet(tweetContent, [alert.id]);
 
   // Si le tweet a été publié avec succès, mettre à jour l'alerte
   if (result.success) {
@@ -890,16 +900,16 @@ export const processUnpostedAlerts = async (): Promise<{
 
       // Formater le contenu du tweet pour le groupe
       const tweetContent = formatTweetFromAlertGroup(alertGroup);
+      const groupAlertIds = alertGroup.map(alert => alert.id);
 
       // Publier le tweet
-      const result = await writeAndPostTweet(tweetContent);
+      const result = await writeAndPostTweet(tweetContent, groupAlertIds);
 
       if (result.success) {
         // Mettre à jour tous les alertes du groupe comme postées
-        const alertIds = alertGroup.map((alert) => alert.id);
-        console.log(`Mise à jour du statut isPosted pour les alertes: ${alertIds.join(", ")}`);
+        console.log(`Mise à jour du statut isPosted pour les alertes: ${groupAlertIds.join(", ")}`);
         await prisma.alert.updateMany({
-          where: { id: { in: alertIds } },
+          where: { id: { in: groupAlertIds } },
           data: { isPosted: true },
         });
 
@@ -1028,6 +1038,7 @@ export const postToTwitter = async (): Promise<{
         try {
           // Format the tweet content for the group
           const tweetContent = formatTweetFromAlertGroup(alertGroup);
+          const groupAlertIds = alertGroup.map(alert => alert.id);
 
           // Reuse the page from login if it exists
           if (loginResult.page) {
@@ -1053,7 +1064,6 @@ export const postToTwitter = async (): Promise<{
             }
 
             // Update alert status in database for all alerts in the group
-            const groupAlertIds = alertGroup.map((alert) => alert.id);
             await prisma.alert.updateMany({
               where: { id: { in: groupAlertIds } },
               data: { isPosted: true, isProcessing: false },
@@ -1068,10 +1078,9 @@ export const postToTwitter = async (): Promise<{
             console.log(
               "Page not available, using individual posting as fallback"
             );
-            const result = await writeAndPostTweet(tweetContent);
+            const result = await writeAndPostTweet(tweetContent, groupAlertIds);
 
             if (result.success) {
-              const groupAlertIds = alertGroup.map((alert) => alert.id);
               await prisma.alert.updateMany({
                 where: { id: { in: groupAlertIds } },
                 data: { isPosted: true, isProcessing: false },
