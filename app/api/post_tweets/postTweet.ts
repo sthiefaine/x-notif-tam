@@ -296,7 +296,7 @@ export const enterTweetContent = async (
         visible: true,
         timeout: 0,
       });
-      await wait(1000);
+      await wait(1200);
       console.log(`Found tweet input with selector: ${selector}`);
 
       if (selector.includes("RichTextInputContainer")) {
@@ -324,7 +324,7 @@ export const enterTweetContent = async (
       console.log("Tweet content entered successfully");
       return true;
     } catch (error) {
-      console.log(`Failed with selector ${selector}, trying next one`);
+      console.log(`Failed with selector ${selector}`);
     }
 
     console.error("Failed to enter tweet content with any selector");

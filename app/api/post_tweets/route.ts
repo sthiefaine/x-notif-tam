@@ -22,13 +22,34 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
+    const fewMinutesAgo = new Date(Date.now() - 4 * 60 * 1000);
+    console.log('Heure actuelle (UTC):', new Date().toISOString());
+    console.log('Heure actuelle (FR):', new Date().toLocaleString('fr-FR', { timeZone: 'Europe/Paris' }));
+    console.log('Heure limite (UTC, 4 minutes avant):', fewMinutesAgo.toISOString());
+    console.log('Heure limite (FR, 4 minutes avant):', fewMinutesAgo.toLocaleString('fr-FR', { timeZone: 'Europe/Paris' }));
+
+    // Vérifier les alertes bloquées avant le nettoyage
+    const stuckAlertsBefore = await prisma.alert.findMany({
+      where: {
+        isProcessing: true,
+        isPosted: false,
+      },
+      select: {
+        id: true,
+        timeStart: true,
+        updatedAt: true,
+        isProcessing: true,
+        isPosted: true
+      }
+    });
+    console.log('Alertes bloquées avant nettoyage:', JSON.stringify(stuckAlertsBefore, null, 2));
+
     const stuckAlerts = await prisma.alert.updateMany({
       where: {
         isProcessing: true,
         isPosted: false,
         updatedAt: {
-          lt: fiveMinutesAgo
+          lte: fewMinutesAgo.toISOString()
         }
       },
       data: {
