@@ -47,7 +47,7 @@ export const launchBrowser = async (): Promise<Browser> => {
     "--disable-software-rasterizer",
     "--disable-features=site-per-process",
     "--disable-features=IsolateOrigins,site-per-process",
-    "--disable-site-isolation-trials"
+    "--disable-site-isolation-trials",
   ];
 
   const puppeteerExtraArgs = {
@@ -174,7 +174,7 @@ export const performLogin = async (page: Page): Promise<string> => {
     if (pageText.includes("utilisateur") || pageText.includes("username")) {
       console.log("Additional verification required");
       await wait(3000);
-      const selector = 'input[autocomplete=on]';
+      const selector = "input[autocomplete=on]";
       const usernameVisible = await page.waitForSelector(selector, {
         visible: true,
         timeout: 40000,
@@ -455,7 +455,7 @@ export const loginToTwitter = async (): Promise<{
           },
         });
         console.log("Invalid session deleted from database");
-        
+
         const loginResult = await goToLogin(page);
         const success = loginResult.includes("Login successful");
 
@@ -618,7 +618,9 @@ export const groupAlertsByHeader = (
   const grouped: Record<string, Alert[]> = {};
 
   for (const alert of alerts) {
-    console.log(`Traitement de l'alerte ${alert.id} avec header: "${alert.headerText}"`);
+    console.log(
+      `Traitement de l'alerte ${alert.id} avec header: "${alert.headerText}"`
+    );
     if (!grouped[alert.headerText]) {
       grouped[alert.headerText] = [];
     }
@@ -630,7 +632,7 @@ export const groupAlertsByHeader = (
   Object.entries(grouped).forEach(([header, alerts]) => {
     console.log(`- Header: "${header}"`);
     console.log(`  Nombre d'alertes: ${alerts.length}`);
-    console.log(`  IDs des alertes: ${alerts.map(a => a.id).join(", ")}`);
+    console.log(`  IDs des alertes: ${alerts.map((a) => a.id).join(", ")}`);
   });
 
   console.log("=== Fin de groupAlertsByHeader ===");
@@ -697,9 +699,10 @@ export const formatTweetFromAlertGroup = (alerts: Alert[]): string => {
   // Add header and time
   tweet += `${startTime}\n`;
   if (sortedRoutes.length > 0) {
-    tweet += sortedRoutes.length > 1
-      ? `Lignes: ${sortedRoutes.join("-")}\n`
-      : `Ligne: ${sortedRoutes[0]}\n`;
+    tweet +=
+      sortedRoutes.length > 1
+        ? `Lignes: ${sortedRoutes.join("-")}\n`
+        : `Ligne: ${sortedRoutes[0]}\n`;
   }
 
   tweet += `${alerts[0].descriptionText}\n`;
@@ -755,10 +758,10 @@ export const writeAndPostTweet = async (
     if (!contentEntered) {
       // Réinitialiser isProcessing à false pour toutes les alertes non postées
       await prisma.alert.updateMany({
-        where: { 
+        where: {
           id: { in: alertIds || [] },
           isPosted: false,
-          isProcessing: true
+          isProcessing: true,
         },
         data: { isProcessing: false },
       });
@@ -841,7 +844,9 @@ export const postTweet = async (
       // Ne pas considérer l'échec de mise à jour comme un échec du tweet
     }
   } else {
-    console.error(`Failed to post tweet for alert ${alert.id}: ${result.message}`);
+    console.error(
+      `Failed to post tweet for alert ${alert.id}: ${result.message}`
+    );
   }
 
   return result;
@@ -900,14 +905,18 @@ export const processUnpostedAlerts = async (): Promise<{
 
       // Formater le contenu du tweet pour le groupe
       const tweetContent = formatTweetFromAlertGroup(alertGroup);
-      const groupAlertIds = alertGroup.map(alert => alert.id);
+      const groupAlertIds = alertGroup.map((alert) => alert.id);
 
       // Publier le tweet
       const result = await writeAndPostTweet(tweetContent, groupAlertIds);
 
       if (result.success) {
         // Mettre à jour tous les alertes du groupe comme postées
-        console.log(`Mise à jour du statut isPosted pour les alertes: ${groupAlertIds.join(", ")}`);
+        console.log(
+          `Mise à jour du statut isPosted pour les alertes: ${groupAlertIds.join(
+            ", "
+          )}`
+        );
         await prisma.alert.updateMany({
           where: { id: { in: groupAlertIds } },
           data: { isPosted: true },
@@ -1012,10 +1021,13 @@ export const postToTwitter = async (): Promise<{
     }
 
     // Marquer les alertes comme en cours de traitement
-    const alertIds = unpostedAlerts.map(alert => alert.id);
+    const alertIds = unpostedAlerts.map((alert) => alert.id);
     await prisma.alert.updateMany({
       where: { id: { in: alertIds } },
-      data: { isProcessing: true },
+      data: {
+        isProcessing: true,
+        inProcessSince: new Date(),
+      },
     });
 
     // Step 3: Group alerts by header text
@@ -1038,7 +1050,7 @@ export const postToTwitter = async (): Promise<{
         try {
           // Format the tweet content for the group
           const tweetContent = formatTweetFromAlertGroup(alertGroup);
-          const groupAlertIds = alertGroup.map(alert => alert.id);
+          const groupAlertIds = alertGroup.map((alert) => alert.id);
 
           // Reuse the page from login if it exists
           if (loginResult.page) {
@@ -1112,9 +1124,9 @@ export const postToTwitter = async (): Promise<{
       console.error("Error in postToTwitter:", error);
       // En cas d'erreur générale, réinitialiser isProcessing pour toutes les alertes non traitées
       await prisma.alert.updateMany({
-        where: { 
+        where: {
           id: { in: alertIds },
-          isPosted: false 
+          isPosted: false,
         },
         data: { isProcessing: false },
       });

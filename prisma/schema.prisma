@@ -45,6 +45,7 @@ model Alert {
   parentAlertId   String?
   parentAlert     Alert?    @relation("AlertComplements", fields: [parentAlertId], references: [id])
   complements     Alert[]   @relation("AlertComplements")
+  inProcessSince  DateTime?
 
   @@map("alerts")
 }

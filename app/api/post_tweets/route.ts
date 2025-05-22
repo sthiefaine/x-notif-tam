@@ -37,7 +37,7 @@ export async function GET(request: NextRequest) {
       select: {
         id: true,
         timeStart: true,
-        updatedAt: true,
+        inProcessSince: true,
         isProcessing: true,
         isPosted: true
       }
@@ -48,12 +48,13 @@ export async function GET(request: NextRequest) {
       where: {
         isProcessing: true,
         isPosted: false,
-        updatedAt: {
+        inProcessSince: {
           lte: fewMinutesAgo.toISOString()
         }
       },
       data: {
-        isProcessing: false
+        isProcessing: false,
+        inProcessSince: null
       }
     });
 

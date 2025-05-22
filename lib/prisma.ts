@@ -1,4 +1,4 @@
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient } from '@prisma/client'
 
 // PrismaClient est attaché au scope global en développement pour éviter
 // d'épuiser les connexions de la base de données pendant le rechargement à chaud
