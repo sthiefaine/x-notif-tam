@@ -580,7 +580,6 @@ const getCauseEmoji = (
  */
 const formatTimeInParis = (date: Date): string => {
   const formatter = new Intl.DateTimeFormat("fr-FR", {
-    timeZone: "Europe/Paris",
     hour: "2-digit",
     minute: "2-digit",
     hour12: false,
@@ -686,6 +685,7 @@ export const formatTweetFromAlertGroup = (alerts: Alert[]): string => {
   });
 
   // Get start time from the first alert (they should be sorted by time)
+  console.log("alerts[0].timeStart", alerts[0].timeStart);
   const startTime = formatTimeInParis(alerts[0].timeStart);
 
   // Build the tweet
