@@ -583,7 +583,11 @@ const formatTimeInParis = (date: Date): string => {
     hour: "2-digit",
     minute: "2-digit",
     hour12: false,
+    timeZone: "Europe/Paris",
   });
+
+  console.log("date", date);
+  console.log("formatter", formatter);
 
   const parts = formatter.formatToParts(date);
   const hour = parts.find((part) => part.type === "hour")?.value || "00";
@@ -685,7 +689,6 @@ export const formatTweetFromAlertGroup = (alerts: Alert[]): string => {
   });
 
   // Get start time from the first alert (they should be sorted by time)
-  console.log("alerts[0].timeStart", alerts[0].timeStart);
   const startTime = formatTimeInParis(alerts[0].timeStart);
 
   // Build the tweet
