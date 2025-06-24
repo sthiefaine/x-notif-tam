@@ -16,6 +16,7 @@
     "lru-cache": "^11.0.2",
     "next": "15.2.2",
     "prisma": "^6.5.0",
+    "protobufjs": "^7.5.3",
     "puppeteer": "^22.9.0",
     "puppeteer-core": "^21.11.0",
     "react": "^19.0.0",
@@ -34,5 +35,10 @@
   },
   "optionalDependencies": {
     "@tailwindcss/oxide-linux-arm64-gnu": "^4.0.1"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "protobufjs"
+    ]
   }
 }

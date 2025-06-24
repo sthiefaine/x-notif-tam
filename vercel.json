@@ -3,7 +3,7 @@
   "crons": [
     {
       "path": "/api/post_tweets",
-      "schedule": "*/1 3-18 * * *"
+      "schedule": "*/2 3-18 * * *"
     },
     {
       "path": "/api/post_tweets",
@@ -20,6 +20,18 @@
     {
       "path": "/api/reload_session",
       "schedule": "0 4 * * 0"
+    },
+    {
+      "path": "/api/get_alerts",
+      "schedule": "*/1 4-19 * * *"
+    },
+    {
+      "path": "/api/get_alerts",
+      "schedule": "*/2 20-23 * * *"
+    },
+    {
+      "path": "/api/get_alerts",
+      "schedule": "*/10 0-3 * * *"
     }
   ]
 }
