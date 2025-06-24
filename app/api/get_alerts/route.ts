@@ -1,6 +1,5 @@
 import { NextRequest } from "next/server";
 import { fetchAndProcessAlerts } from "@/tasks/fetchAlerts";
-import { revalidatePath, revalidateTag } from "next/cache";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -19,9 +18,6 @@ export async function GET(request: NextRequest) {
     }
 
     await fetchAndProcessAlerts();
-
-    revalidatePath("/");
-    revalidateTag("alerts");
 
     return new Response(
       JSON.stringify({

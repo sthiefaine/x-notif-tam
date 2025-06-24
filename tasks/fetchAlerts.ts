@@ -6,7 +6,6 @@ import {
   determineCauseByKeywords,
   determineEffectByKeywords,
 } from "@/helpers/incident";
-import { revalidatePath, revalidateTag } from "next/cache";
 import crypto from "crypto";
 
 const ALERT_URL =
@@ -113,9 +112,6 @@ async function saveAlerts(feedMessage: any): Promise<void> {
     console.log(
       `${feedMessage.entity.length} alertes traitées (dont ${complementAlerts.length} compléments)`
     );
-
-    revalidatePath("/");
-    revalidatePath("/alertes");
   } catch (error) {
     console.error("Erreur lors de la sauvegarde des alertes:", error);
     throw error;
@@ -305,9 +301,41 @@ async function processComplement(entity: {
     data: { updatedAt: new Date() },
   });
 
-  console.log(
-    `Complément ${uniqueId} lié à l'alerte parent ${parentAlert.id}`
-  );
+  console.log(`Complément ${uniqueId} lié à l'alerte parent ${parentAlert.id}`);
+}
+
+async function triggerTweetPosting(): Promise<void> {
+  try {
+    console.log("Déclenchement de la publication des tweets...");
+
+    const baseUrl =
+      process.env.NEXTAUTH_URL ||
+      process.env.VERCEL_URL ||
+      "http://localhost:3000";
+    const url = `${baseUrl}/api/post_tweets`;
+
+    const response = await fetch(url, {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${process.env.CRON_SECRET}`,
+        "Content-Type": "application/json",
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error(
+        `Erreur lors de l'appel à la route de post: ${response.status} ${response.statusText}`
+      );
+    }
+
+    const result = await response.json();
+    console.log("Résultat de la publication des tweets:", result);
+  } catch (error) {
+    console.error(
+      "Erreur lors du déclenchement de la publication des tweets:",
+      error
+    );
+  }
 }
 
 export async function fetchAndProcessAlerts(): Promise<void> {
@@ -318,7 +346,7 @@ export async function fetchAndProcessAlerts(): Promise<void> {
 
     await saveAlerts(feedMessage);
 
-    revalidateTag("alerts");
+    await triggerTweetPosting();
 
     console.log("Traitement des alertes terminé avec succès");
   } catch (error) {
