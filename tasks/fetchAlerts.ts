@@ -1,7 +1,6 @@
 import * as protobuf from "protobufjs";
 import { prisma } from "@/lib/prisma";
 import path from "path";
-import fs from "fs";
 import {
   determineCauseByKeywords,
   determineEffectByKeywords,

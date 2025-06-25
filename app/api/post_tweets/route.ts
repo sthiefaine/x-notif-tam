@@ -28,71 +28,82 @@ export async function GET(request: NextRequest) {
     console.log('Heure limite (UTC, 4 minutes avant):', fewMinutesAgo.toISOString());
     console.log('Heure limite (FR, 4 minutes avant):', fewMinutesAgo.toLocaleString('fr-FR', { timeZone: 'Europe/Paris' }));
 
-    // Vérifier les alertes bloquées avant le nettoyage
-    const stuckAlertsBefore = await prisma.alert.findMany({
-      where: {
-        isProcessing: true,
-        isPosted: false,
-      },
-      select: {
-        id: true,
-        timeStart: true,
-        inProcessSince: true,
-        isProcessing: true,
-        isPosted: true
-      }
-    });
-    console.log('Alertes bloquées avant nettoyage:', JSON.stringify(stuckAlertsBefore, null, 2));
-
-    const stuckAlerts = await prisma.alert.updateMany({
-      where: {
-        isProcessing: true,
-        isPosted: false,
-        inProcessSince: {
-          lte: fewMinutesAgo.toISOString()
-        }
-      },
-      data: {
-        isProcessing: false,
-        inProcessSince: null
-      }
-    });
-
-    console.log(`Nettoyage de ${stuckAlerts.count} alertes bloquées`);
-
-    // Lire les paramètres de requête
+    // Lire les paramètres de requête AVANT la transaction
     const searchParams = request.nextUrl.searchParams;
     const debug = searchParams.get("debug") === "true";
     const dryRun = searchParams.get("dryRun") === "true";
 
-    // Récupérer le nombre d'alertes non postées
-    const unpostedCount = await prisma.alert.count({
-      where: {
-        isPosted: false,
-        isProcessing: false,
-        timeStart: {
-          gte: new Date(new Date().setHours(0, 0, 0, 0)),
-          lte: new Date(new Date().setHours(23, 59, 59, 999)),
+    // Optimisation : Combiner toutes les requêtes en une seule transaction
+    const dbResults = await prisma.$transaction(async (tx) => {
+      // 1. Vérifier les alertes bloquées avant le nettoyage
+      const stuckAlertsBefore = await tx.alert.findMany({
+        where: {
+          isProcessing: true,
+          isPosted: false,
         },
-      },
-    });
-    console.log('unpostedCount', unpostedCount);
+        select: {
+          id: true,
+          timeStart: true,
+          inProcessSince: true,
+          isProcessing: true,
+          isPosted: true
+        }
+      });
 
-    // Tester le formatage des tweets si demandé
-    let formattedTweets = null;
-    if (dryRun && unpostedCount > 0) {
-      const alerts = await prisma.alert.findMany({
+      // 2. Nettoyer les alertes bloquées
+      const stuckAlerts = await tx.alert.updateMany({
+        where: {
+          isProcessing: true,
+          isPosted: false,
+          inProcessSince: {
+            lte: fewMinutesAgo.toISOString()
+          }
+        },
+        data: {
+          isProcessing: false,
+          inProcessSince: null
+        }
+      });
+
+      // 3. Compter les alertes non postées
+      const unpostedCount = await tx.alert.count({
         where: {
           isPosted: false,
           isProcessing: false,
           timeStart: {
             gte: new Date(new Date().setHours(0, 0, 0, 0)),
+            lte: new Date(new Date().setHours(23, 59, 59, 999)),
           },
         },
-        orderBy: [{ headerText: "asc" }, { timeStart: "asc" }],
       });
 
-      const groupedAlerts = groupAlertsByHeader(alerts);
+      // 4. Récupérer les alertes pour dryRun si nécessaire
+      let alertsForDryRun = null;
+      if (dryRun && unpostedCount > 0) {
+        alertsForDryRun = await tx.alert.findMany({
+          where: {
+            isPosted: false,
+            isProcessing: false,
+            timeStart: {
+              gte: new Date(new Date().setHours(0, 0, 0, 0)),
+            },
+          },
+          orderBy: [{ headerText: "asc" }, { timeStart: "asc" }],
+        });
+      }
+
+      return { stuckAlertsBefore, stuckAlerts, unpostedCount, alertsForDryRun };
+    });
+
+    console.log('Alertes bloquées avant nettoyage:', JSON.stringify(dbResults.stuckAlertsBefore, null, 2));
+    console.log(`Nettoyage de ${dbResults.stuckAlerts.count} alertes bloquées`);
+
+    console.log('unpostedCount', dbResults.unpostedCount);
+
+    // Tester le formatage des tweets si demandé
+    let formattedTweets = null;
+    if (dryRun && dbResults.unpostedCount > 0 && dbResults.alertsForDryRun) {
+      const groupedAlerts = groupAlertsByHeader(dbResults.alertsForDryRun);
       formattedTweets = Object.entries(groupedAlerts).map(
         ([header, group]) => ({
           header,
@@ -105,7 +116,7 @@ export async function GET(request: NextRequest) {
 
     // Poster les tweets si demandé
     let postResult = null;
-    if (unpostedCount > 0 && !dryRun) {
+    if (dbResults.unpostedCount > 0 && !dryRun) {
       console.log("Posting tweets for unposted alerts...");
       postResult = await postToTwitter();
       console.log("Post result:", postResult);
@@ -113,7 +124,7 @@ export async function GET(request: NextRequest) {
 
     const response = {
       success: true,
-      unpostedAlerts: unpostedCount,
+      unpostedAlerts: dbResults.unpostedCount,
       dryRun: dryRun || false,
       formattedTweets: formattedTweets || null,
       postingResult: postResult || null,
