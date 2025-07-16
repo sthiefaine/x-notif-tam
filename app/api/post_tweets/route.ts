@@ -13,13 +13,15 @@ export async function GET(request: NextRequest) {
   try {
     const authHeader = request.headers.get("authorization");
 
-    if (
-      process.env.CRON_SECRET &&
-      authHeader !== `Bearer ${process.env.CRON_SECRET}`
-    ) {
-      return new Response(JSON.stringify({ error: "Non autorisé" }), {
-        status: 401,
-      });
+    // Vérifier l'authentification seulement si CRON_SECRET est défini
+    if (process.env.CRON_SECRET) {
+      if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+        return new Response(JSON.stringify({ error: "Non autorisé" }), {
+          status: 401,
+        });
+      }
+    } else {
+      console.warn("authentification désactivée");
     }
 
     const fewMinutesAgo = new Date(Date.now() - 4 * 60 * 1000);

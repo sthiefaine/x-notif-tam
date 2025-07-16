@@ -6,6 +6,7 @@ import {
   determineEffectByKeywords,
 } from "@/helpers/incident";
 import crypto from "crypto";
+import { postToTwitter } from "@/app/api/post_tweets/postTweet";
 
 const ALERT_URL =
   process.env.ALERT_URL ||
@@ -310,28 +311,89 @@ async function processComplement(entity: {
 async function triggerTweetPosting(): Promise<void> {
   try {
     console.log("Déclenchement de la publication des tweets...");
-    
-    const baseUrl = process.env.NEXTAUTH_URL || process.env.VERCEL_URL || 'http://localhost:3000';
-    const url = baseUrl.startsWith('http') ? `${baseUrl}/api/post_tweets` : `https://${baseUrl}/api/post_tweets`;
-    
-    console.log("URL de la route:", url);
-    
-    const response = await fetch(url, {
-      method: 'GET',
-      headers: {
-        'Authorization': `Bearer ${process.env.CRON_SECRET}`,
-        'Content-Type': 'application/json',
-      },
+
+    // Nettoyer les alertes bloquées avant de poster
+    const fewMinutesAgo = new Date(Date.now() - 4 * 60 * 1000);
+    console.log("Heure actuelle (UTC):", new Date().toISOString());
+    console.log(
+      "Heure actuelle (FR):",
+      new Date().toLocaleString("fr-FR", { timeZone: "Europe/Paris" })
+    );
+    console.log(
+      "Heure limite (UTC, 4 minutes avant):",
+      fewMinutesAgo.toISOString()
+    );
+    console.log(
+      "Heure limite (FR, 4 minutes avant):",
+      fewMinutesAgo.toLocaleString("fr-FR", { timeZone: "Europe/Paris" })
+    );
+
+    // Nettoyer les alertes bloquées dans une transaction
+    const dbResults = await prisma.$transaction(async (tx) => {
+      // 1. Vérifier les alertes bloquées avant le nettoyage
+      const stuckAlertsBefore = await tx.alert.findMany({
+        where: {
+          isProcessing: true,
+          isPosted: false,
+        },
+        select: {
+          id: true,
+          timeStart: true,
+          inProcessSince: true,
+          isProcessing: true,
+          isPosted: true,
+        },
+      });
+
+      // 2. Nettoyer les alertes bloquées
+      const stuckAlerts = await tx.alert.updateMany({
+        where: {
+          isProcessing: true,
+          isPosted: false,
+          inProcessSince: {
+            lte: fewMinutesAgo.toISOString(),
+          },
+        },
+        data: {
+          isProcessing: false,
+          inProcessSince: null,
+        },
+      });
+
+      // 3. Compter les alertes non postées
+      const unpostedCount = await tx.alert.count({
+        where: {
+          isPosted: false,
+          isProcessing: false,
+          timeStart: {
+            gte: new Date(new Date().setHours(0, 0, 0, 0)),
+            lte: new Date(new Date().setHours(23, 59, 59, 999)),
+          },
+        },
+      });
+
+      return { stuckAlertsBefore, stuckAlerts, unpostedCount };
     });
 
-    if (!response.ok) {
-      throw new Error(`Erreur lors de l'appel à la route de post: ${response.status} ${response.statusText}`);
-    }
+    console.log(
+      "Alertes bloquées avant nettoyage:",
+      JSON.stringify(dbResults.stuckAlertsBefore, null, 2)
+    );
+    console.log(`Nettoyage de ${dbResults.stuckAlerts.count} alertes bloquées`);
+    console.log("unpostedCount", dbResults.unpostedCount);
 
-    const result = await response.json();
-    console.log("Résultat de la publication des tweets:", result);
+    // Poster les tweets seulement s'il y a des alertes non postées
+    if (dbResults.unpostedCount > 0) {
+      const result = await postToTwitter();
+      console.log("Résultat de la publication des tweets:", result);
+    } else {
+      console.log("Aucune alerte non postée à traiter");
+    }
   } catch (error) {
-    console.error("Erreur lors du déclenchement de la publication des tweets:", error);
+    console.error(
+      "Erreur lors du déclenchement de la publication des tweets:",
+      error
+    );
   }
 }
 
