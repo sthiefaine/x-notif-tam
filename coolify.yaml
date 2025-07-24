@@ -1,0 +1,32 @@
+cronjobs:
+  - name: post_tweets_3_18
+    schedule: "*/1 3-18 * * *"
+    command: "curl -X POST \"$BASE_URL/api/post_tweets\" -H \"Authorization: Bearer $CRON_SECRET\""
+
+  - name: post_tweets_19_23
+    schedule: "*/2 19-23 * * *"
+    command: "curl -X POST \"$BASE_URL/api/post_tweets\" -H \"Authorization: Bearer $CRON_SECRET\""
+
+  - name: post_tweets_0_2
+    schedule: "*/20 0-2 * * *"
+    command: "curl -X POST \"$BASE_URL/api/post_tweets\" -H \"Authorization: Bearer $CRON_SECRET\""
+
+  - name: refresh_session
+    schedule: "0 3 * * *"
+    command: "curl -X POST \"$BASE_URL/api/refresh_session\" -H \"Authorization: Bearer $CRON_SECRET\""
+
+  - name: reload_session
+    schedule: "0 4 * * 0"
+    command: "curl -X POST \"$BASE_URL/api/reload_session\" -H \"Authorization: Bearer $CRON_SECRET\""
+
+  - name: get_alerts_4_19
+    schedule: "*/1 4-19 * * *"
+    command: "curl -X POST \"$BASE_URL/api/get_alerts\" -H \"Authorization: Bearer $CRON_SECRET\""
+
+  - name: get_alerts_20_23
+    schedule: "*/2 20-23 * * *"
+    command: "curl -X POST \"$BASE_URL/api/get_alerts\" -H \"Authorization: Bearer $CRON_SECRET\""
+
+  - name: get_alerts_0_3
+    schedule: "*/10 0-3 * * *"
+    command: "curl -X POST \"$BASE_URL/api/get_alerts\" -H \"Authorization: Bearer $CRON_SECRET\""
