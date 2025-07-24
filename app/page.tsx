@@ -29,7 +29,7 @@ const getRoutesLineNumbers = unstable_cache(
 
 export default async function Home() {
   const routesLineNumbers = await getRoutesLineNumbers();
-  const apiBaseUrl = "https://x-notif-tam.vercel.app/api/alerts";
+  const apiBaseUrl = "/api/alerts";
 
   return (
     <main>
