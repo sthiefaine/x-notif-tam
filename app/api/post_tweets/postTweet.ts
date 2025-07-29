@@ -59,7 +59,7 @@ export const launchBrowser = async (): Promise<Browser> => {
     args: isDev ? [] : [...chromium.args, ...serverlessArgs],
     executablePath: isDev
       ? localExecutablePath
-      : await chromium.executablePath(remoteExecutablePath),
+      : "/usr/bin/chromium-browser", // Utiliser Chromium système installé dans Docker
     headless: isDev ? false : "new",
     ...puppeteerExtraArgs,
   });

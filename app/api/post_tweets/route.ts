@@ -25,11 +25,6 @@ export async function GET(request: NextRequest) {
     }
 
     const fewMinutesAgo = new Date(Date.now() - 4 * 60 * 1000);
-    console.log('Heure actuelle (UTC):', new Date().toISOString());
-    console.log('Heure actuelle (FR):', new Date().toLocaleString('fr-FR', { timeZone: 'Europe/Paris' }));
-    console.log('Heure limite (UTC, 4 minutes avant):', fewMinutesAgo.toISOString());
-    console.log('Heure limite (FR, 4 minutes avant):', fewMinutesAgo.toLocaleString('fr-FR', { timeZone: 'Europe/Paris' }));
-
     // Lire les paramètres de requête AVANT la transaction
     const searchParams = request.nextUrl.searchParams;
     const debug = searchParams.get("debug") === "true";
