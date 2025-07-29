@@ -80,6 +80,7 @@ async function parseAlertFile(buffer: Buffer): Promise<any> {
 async function saveAlerts(feedMessage: any): Promise<void> {
   try {
     if (!feedMessage.entity || !Array.isArray(feedMessage.entity)) {
+      console.log(feedMessage);
       console.warn("Aucune entité trouvée dans le feed message");
       return;
     }
