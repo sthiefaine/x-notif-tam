@@ -1,41 +1,34 @@
-# Use Node.js 22 (latest LTS) - same as Vercel
-FROM node:22-alpine
+# Use Node.js 20 LTS
+FROM node:20-alpine
 
 # Define build arguments
 ARG USER_EMAIL
 ARG USER_PASSWORD
 ARG DATABASE_URL
+ARG TWITTER_VERIFICATION_CODE
 
-# Install system dependencies for Puppeteer and other native modules
+# Install system dependencies for Puppeteer and Chromium
 RUN apk add --no-cache \
-    build-base \
-    cairo-dev \
-    jpeg-dev \
-    pango-dev \
-    musl-dev \
-    giflib-dev \
-    pixman-dev \
-    pangomm-dev \
-    libjpeg-turbo-dev \
-    freetype-dev \
-    pkgconfig \
     chromium \
     nss \
     freetype \
-    freetype-dev \
     harfbuzz \
     ca-certificates \
     ttf-freefont \
-    curl
+    curl \
+    wget \
+    tar \
+    brotli
 
-# Set Puppeteer environment variables
+# Set Puppeteer environment variables to use system Chromium
 ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true \
     PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser
 
 # Set build-time environment variables from ARGs
 ENV USER_EMAIL=$USER_EMAIL \
     USER_PASSWORD=$USER_PASSWORD \
-    DATABASE_URL=$DATABASE_URL
+    DATABASE_URL=$DATABASE_URL \
+    TWITTER_VERIFICATION_CODE=$TWITTER_VERIFICATION_CODE
 
 # Verify Node.js version
 RUN node --version && npm --version

@@ -2,6 +2,7 @@ import puppeteer, { KnownDevices, Browser, Page } from "puppeteer-core";
 import chromium from "@sparticuz/chromium-min";
 import { prisma } from "@/lib/prisma";
 import { Alert } from "@prisma/client";
+import { existsSync } from "fs";
 
 // Configuration
 const localExecutablePath =
@@ -54,12 +55,26 @@ export const launchBrowser = async (): Promise<Browser> => {
     ignoreHTTPSErrors: true,
   };
 
-  console.log("Launching browser");
+  let executablePath;
+  if (isDev) {
+    executablePath = localExecutablePath;
+  } else {
+    // Check if system chromium exists, otherwise use remote
+    const systemChromiumPath = "/usr/bin/chromium-browser";
+    
+    if (existsSync(systemChromiumPath)) {
+      console.log("Using system chromium-browser");
+      executablePath = systemChromiumPath;
+    } else {
+      console.log("System chromium not found, using @sparticuz/chromium");
+      executablePath = await chromium.executablePath(remoteExecutablePath);
+    }
+  }
+
+  console.log("Launching browser with executable:", executablePath);
   return await puppeteer.launch({
     args: isDev ? [] : [...chromium.args, ...serverlessArgs],
-    executablePath: isDev
-      ? localExecutablePath
-      : "/usr/bin/chromium-browser", // Utiliser Chromium système installé dans Docker
+    executablePath,
     headless: isDev ? false : "new",
     ...puppeteerExtraArgs,
   });
@@ -75,6 +90,24 @@ export const configurePage = async (page: Page): Promise<Page> => {
   const userAgent =
     "Mozilla/5.0 (iPhone; CPU iPhone OS 17_5_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) CriOS/125.0.6422.80 Mobile/15E148 Safari/604.1";
   await page.setUserAgent(userAgent);
+
+  // Set extra headers to simulate French location
+  await page.setExtraHTTPHeaders({
+    "Accept-Language": "fr-FR,fr;q=0.9,en;q=0.8",
+    "Accept-Encoding": "gzip, deflate, br",
+    Accept:
+      "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8",
+    "Cache-Control": "no-cache",
+    Pragma: "no-cache",
+    "Sec-Fetch-Dest": "document",
+    "Sec-Fetch-Mode": "navigate",
+    "Sec-Fetch-Site": "none",
+    "Upgrade-Insecure-Requests": "1",
+  });
+
+  // Set timezone to Paris
+  await page.emulateTimezone("Europe/Paris");
+
   await page.emulate(device);
   return page;
 };
@@ -220,17 +253,185 @@ export const performLogin = async (page: Page): Promise<string> => {
     }
 
     await passwordInput.type(process.env.USER_PASSWORD || "", { delay: 150 });
-    console.log("Password entered, pressing Enter");
-    await page.keyboard.press("Enter");
+    console.log("Password entered, looking for login button");
+
+    // Try to find and click the login button instead of pressing Enter
+    const loginButtonSelectors = [
+      'button[data-testid="LoginForm_Login_Button"]',
+      'div[data-testid="LoginForm_Login_Button"]',
+      'button[type="submit"]',
+      'div[role="button"]:has-text("Log in")',
+      'div[role="button"]:has-text("Se connecter")',
+    ];
+
+    let loginClicked = false;
+    for (const selector of loginButtonSelectors) {
+      try {
+        await page.waitForSelector(selector, { timeout: 2000 });
+        await page.click(selector);
+        console.log(`Clicked login button with selector: ${selector}`);
+        loginClicked = true;
+        break;
+      } catch (e) {
+        console.log(`Login button selector ${selector} not found`);
+      }
+    }
+
+    if (!loginClicked) {
+      console.log("No login button found, trying alternative methods");
+
+      // Try Tab + Enter (common pattern)
+      try {
+        await page.keyboard.press("Tab");
+        await wait(500);
+        await page.keyboard.press("Enter");
+        console.log("Tried Tab + Enter");
+      } catch (e) {
+        console.log("Tab + Enter failed, trying direct Enter");
+        await page.keyboard.press("Enter");
+      }
+    }
 
     // Wait longer for login to complete
-    console.log("Password submitted, waiting for navigation");
-    await wait(18000);
+    console.log("Login submitted, waiting for navigation");
+    await wait(3000);
+
+    // Check for any error messages on the page
+    try {
+      const errorElements = await page.$$(
+        'div[data-testid="error"], div[role="alert"], .error, [data-testid*="error"]'
+      );
+      if (errorElements.length > 0) {
+        console.log("Found error elements, checking content...");
+        for (const element of errorElements) {
+          const errorText = await element.evaluate((el) => el.textContent);
+          if (errorText && errorText.trim()) {
+            console.log("Error message found:", errorText);
+          }
+        }
+      }
+    } catch (e) {
+      console.log("No error messages found");
+    }
+
+    // Check if we need to handle 2FA or additional verification
+    const pageContent = await page.content();
+    if (
+      pageContent.includes("verification") ||
+      pageContent.includes("code") ||
+      pageContent.includes("authenticator")
+    ) {
+      console.log("Possible 2FA or verification step detected");
+
+      // Try to find what kind of verification is needed
+      try {
+        const bodyText = await page.evaluate(() => document.body.innerText);
+        console.log("=== PAGE CONTENT FOR DEBUGGING ===");
+        console.log(bodyText.substring(0, 1000)); // First 1000 chars
+        console.log("=== END PAGE CONTENT ===");
+
+        // Look for specific verification inputs
+        const verificationInputs = await page.$$(
+          'input[type="text"], input[inputmode="numeric"]'
+        );
+        console.log(
+          `Found ${verificationInputs.length} potential verification inputs`
+        );
+
+        // Check for CAPTCHA
+        if (
+          bodyText.includes("CAPTCHA") ||
+          bodyText.includes("captcha") ||
+          bodyText.includes("robot")
+        ) {
+          console.log("CAPTCHA detected - manual intervention may be required");
+        }
+
+        // Check for email verification
+        if (
+          bodyText.includes("email") ||
+          bodyText.includes("e-mail") ||
+          bodyText.includes("single-use code")
+        ) {
+          console.log("Email verification required - looking for code input");
+
+          // Try to find and fill the verification code input
+          const codeInputSelectors = [
+            'input[name="challenge_response"]',
+            'input[data-testid="ocfEnterTextTextInput"]',
+            'input[autocomplete="one-time-code"]',
+            'input[inputmode="text"]',
+            'input[type="text"]',
+          ];
+
+          let codeEntered = false;
+          for (const selector of codeInputSelectors) {
+            try {
+              await page.waitForSelector(selector, { timeout: 3000 });
+              const codeInput = await page.$(selector);
+              if (codeInput) {
+                console.log(`Found code input with selector: ${selector}`);
+                const verificationCode =
+                  process.env.TWITTER_VERIFICATION_CODE || "";
+                if (!verificationCode) {
+                  console.log(
+                    "No verification code found in environment variables"
+                  );
+                  return "Login failed: No verification code available";
+                }
+                await codeInput.type(verificationCode, { delay: 100 });
+                console.log("Email verification code entered");
+                codeEntered = true;
+
+                // Try to submit the code
+                await page.keyboard.press("Enter");
+                console.log("Code submitted with Enter");
+
+                // Wait for verification
+                await wait(3000);
+                break;
+              }
+            } catch (e) {
+              console.log(`Code input selector ${selector} not found`);
+            }
+          }
+
+          if (!codeEntered) {
+            console.log("Could not find email verification code input");
+          }
+        }
+
+        // Check for phone verification
+        if (
+          bodyText.includes("phone") ||
+          bodyText.includes("SMS") ||
+          bodyText.includes("text message")
+        ) {
+          console.log("Phone/SMS verification may be required");
+        }
+      } catch (e) {
+        console.log("Error getting page content for debugging:", e);
+      }
+    }
 
     const currentUrl = page.url();
     console.log("Current URL after login attempt:", currentUrl);
 
-    if (currentUrl === "https://x.com/home") {
+    // Also check page title for more context
+    const pageTitle = await page.title();
+    console.log("Page title:", pageTitle);
+
+    // Take a screenshot for debugging if still on login page
+    if (currentUrl.includes("/login") || currentUrl.includes("/flow/login")) {
+      try {
+        await page.screenshot({ path: "/tmp/login-debug.png", fullPage: true });
+        console.log("Debug screenshot saved to /tmp/login-debug.png");
+      } catch (e) {
+        console.log("Could not save debug screenshot:", e);
+      }
+    }
+
+    if (currentUrl === "https://x.com/home" || currentUrl.includes("/home")) {
       console.log("Login successful");
 
       // Aller directement à la page de composition de tweet

@@ -1,5 +1,5 @@
 import * as protobuf from "protobufjs";
-import { prisma } from "@/lib/prisma";
+import { prisma, ensurePrismaConnection } from "@/lib/prisma";
 import path from "path";
 import {
   determineCauseByKeywords,
@@ -80,6 +80,7 @@ async function parseAlertFile(buffer: Buffer): Promise<any> {
 async function saveAlerts(feedMessage: any): Promise<void> {
   try {
     if (!feedMessage.entity || !Array.isArray(feedMessage.entity)) {
+      console.log(feedMessage);
       console.warn("Aucune entité trouvée dans le feed message");
       return;
     }
@@ -399,6 +400,8 @@ async function triggerTweetPosting(): Promise<void> {
 
 export async function fetchAndProcessAlerts(): Promise<void> {
   try {
+    await ensurePrismaConnection();
+    
     const alertBuffer = await downloadAlertFile();
 
     const feedMessage = await parseAlertFile(alertBuffer);
