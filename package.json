@@ -11,11 +11,11 @@
     "vercel-build": "npx prisma generate && next build"
   },
   "dependencies": {
-    "@prisma/client": "^6.5.0",
+    "@prisma/client": "^6.15.0",
     "@sparticuz/chromium-min": "^119.0.2",
     "lru-cache": "^11.0.2",
     "next": "15.2.2",
-    "prisma": "^6.5.0",
+    "prisma": "^6.15.0",
     "protobufjs": "^7.5.3",
     "puppeteer": "^22.9.0",
     "puppeteer-core": "^21.11.0",

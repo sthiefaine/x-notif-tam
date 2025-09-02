@@ -411,8 +411,7 @@ export async function fetchAndProcessAlerts(): Promise<void> {
     console.log("Traitement des alertes terminé avec succès");
   } catch (error) {
     console.error("Erreur lors du traitement des alertes:", error);
-  } finally {
-    await prisma.$disconnect();
+    throw error;
   }
 }
 
