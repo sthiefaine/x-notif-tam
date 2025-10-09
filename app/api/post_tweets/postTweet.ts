@@ -2,7 +2,8 @@ import puppeteer, { KnownDevices, Browser, Page } from "puppeteer-core";
 import chromium from "@sparticuz/chromium-min";
 import { prisma } from "@/lib/prisma";
 import { Alert } from "@prisma/client";
-import { existsSync } from "fs";
+import { existsSync, mkdirSync, readdirSync, unlinkSync, statSync } from "fs";
+import path from "path";
 
 // Configuration
 const localExecutablePath =
@@ -17,7 +18,7 @@ const remoteExecutablePath =
 
 const isDev = process.env.NODE_ENV === "development";
 const urlLogin = "https://x.com/i/flow/login";
-const deviceName = "iPhone 11 Pro Max";
+const deviceName = "Galaxy S9+";
 const device = KnownDevices[deviceName];
 let browser: Browser | null = null;
 
@@ -30,6 +31,62 @@ if (!process.env.USER_EMAIL || !process.env.USER_PASSWORD) {
 
 const wait = (ms: number): Promise<void> =>
   new Promise((resolve) => setTimeout(resolve, ms));
+
+/**
+ * Nettoie les screenshots de plus de 24 heures et limite à 10 fichiers max
+ * @param screenshotDir Le répertoire des screenshots
+ * @returns True si on peut créer un nouveau screenshot, false si limite atteinte
+ */
+const cleanOldScreenshots = (screenshotDir: string): boolean => {
+  try {
+    if (!existsSync(screenshotDir)) return true;
+    
+    const files = readdirSync(screenshotDir)
+      .filter(file => file.endsWith('.png'))
+      .map(file => ({
+        name: file,
+        path: path.join(screenshotDir, file),
+        mtime: statSync(path.join(screenshotDir, file)).mtime
+      }))
+      .sort((a, b) => b.mtime.getTime() - a.mtime.getTime()); // Plus récent en premier
+    
+    const oneDayAgo = Date.now() - 24 * 60 * 60 * 1000;
+    let deletedCount = 0;
+    
+    // Supprimer les fichiers de plus de 24h
+    files.forEach((file) => {
+      if (file.mtime.getTime() < oneDayAgo) {
+        unlinkSync(file.path);
+        deletedCount++;
+        console.log(`Deleted old screenshot: ${file.name}`);
+      }
+    });
+    
+    // Recompter les fichiers restants après nettoyage
+    const remainingFiles = files.filter(file => file.mtime.getTime() >= oneDayAgo);
+    
+    // Si on a déjà 10 fichiers ou plus, supprimer les plus anciens
+    if (remainingFiles.length >= 10) {
+      const filesToDelete = remainingFiles.slice(9); // Garder les 9 plus récents
+      filesToDelete.forEach((file) => {
+        unlinkSync(file.path);
+        deletedCount++;
+        console.log(`Deleted screenshot due to limit: ${file.name}`);
+      });
+    }
+    
+    if (deletedCount > 0) {
+      console.log(`Cleaned up ${deletedCount} screenshots`);
+    }
+    
+    // Vérifier si on peut encore créer un screenshot
+    const finalCount = remainingFiles.length - Math.max(0, remainingFiles.length - 9);
+    return finalCount < 10;
+  } catch (error) {
+    console.error("Error cleaning old screenshots:", error);
+    return false;
+  }
+};
 
 /**
  * Lance le navigateur Puppeteer
@@ -192,12 +249,35 @@ export const performLogin = async (page: Page): Promise<string> => {
     if (!usernameVisible) throw new Error("Username input field not found");
     await usernameVisible.type(process.env.USER_EMAIL || "", { delay: 50 });
 
+        // Prendre un screenshot après soumission du username
+        try {
+          const screenshotDir = path.join(process.cwd(), "public", "screenshots");
+          if (!existsSync(screenshotDir)) {
+            mkdirSync(screenshotDir, { recursive: true });
+          }
+          
+          const canCreateScreenshot = cleanOldScreenshots(screenshotDir);
+          
+          if (canCreateScreenshot) {
+            const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
+            const screenshotPath = path.join(screenshotDir, `username-submitted-${timestamp}.png`);
+            await page.screenshot({ path: screenshotPath, fullPage: true });
+            console.log(`Screenshot saved: ${screenshotPath}`);
+          } else {
+            console.log("Screenshot limit reached (10 max), skipping username submitted screenshot");
+          }
+        } catch (screenshotError) {
+          console.error("Error taking username submitted screenshot:", screenshotError);
+        }
+    
+        
     // Cliquer sur "Suivant"
     await page.evaluate(() =>
       (document.querySelector("button:nth-child(6)") as HTMLElement).click()
     );
 
     console.log("Username submitted");
+    
     await wait(2000);
 
     console.log("Current URL after username:", page.url());
@@ -206,6 +286,29 @@ export const performLogin = async (page: Page): Promise<string> => {
     const pageText = (await page.$eval("*", (el) => el.textContent)) || "";
     if (pageText.includes("utilisateur") || pageText.includes("username")) {
       console.log("Additional verification required");
+      
+      // Prendre un screenshot avec timestamp
+      try {
+        const screenshotDir = path.join(process.cwd(), "public", "screenshots");
+        if (!existsSync(screenshotDir)) {
+          mkdirSync(screenshotDir, { recursive: true });
+        }
+        
+        // Nettoyer les anciens screenshots et vérifier la limite
+        const canCreateScreenshot = cleanOldScreenshots(screenshotDir);
+        
+        if (canCreateScreenshot) {
+          const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
+          const screenshotPath = path.join(screenshotDir, `verification-required-${timestamp}.png`);
+          await page.screenshot({ path: screenshotPath, fullPage: true });
+          console.log(`Screenshot saved: ${screenshotPath}`);
+        } else {
+          console.log("Screenshot limit reached (10 max), skipping screenshot creation");
+        }
+      } catch (screenshotError) {
+        console.error("Error taking screenshot:", screenshotError);
+      }
+      
       await wait(3000);
       const selector = "input[autocomplete=on]";
       const usernameVisible = await page.waitForSelector(selector, {
