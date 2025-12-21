@@ -19,8 +19,8 @@
     "protobufjs": "^7.5.3",
     "puppeteer": "^22.9.0",
     "puppeteer-core": "^21.11.0",
-    "react": "^19.0.0",
-    "react-dom": "^19.0.0"
+    "react": "^19.0.1",
+    "react-dom": "^19.0.1"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3",
