@@ -11,14 +11,6 @@ cronjobs:
     schedule: "*/20 0-2 * * *"
     command: "curl -X POST \"$BASE_URL/api/post_tweets\" -H \"Authorization: Bearer $CRON_SECRET\""
 
-  - name: refresh_session
-    schedule: "0 3 * * *"
-    command: "curl -X POST \"$BASE_URL/api/refresh_session\" -H \"Authorization: Bearer $CRON_SECRET\""
-
-  - name: reload_session
-    schedule: "0 4 * * 0"
-    command: "curl -X POST \"$BASE_URL/api/reload_session\" -H \"Authorization: Bearer $CRON_SECRET\""
-
   - name: get_alerts_4_19
     schedule: "*/1 4-19 * * *"
     command: "curl -X POST \"$BASE_URL/api/get_alerts\" -H \"Authorization: Bearer $CRON_SECRET\""

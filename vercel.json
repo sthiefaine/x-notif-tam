@@ -14,14 +14,6 @@
       "schedule": "*/20 0-2 * * *"
     },
     {
-      "path": "/api/refresh_session",
-      "schedule": "0 3 * * *"
-    },
-    {
-      "path": "/api/reload_session",
-      "schedule": "0 4 * * 0"
-    },
-    {
       "path": "/api/get_alerts",
       "schedule": "*/1 4-19 * * *"
     },

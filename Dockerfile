@@ -1,34 +1,13 @@
 # Use Node.js 20 LTS
 FROM node:20-alpine
 
-# Define build arguments
-ARG USER_EMAIL
-ARG USER_PASSWORD
+# DATABASE_URL est nécessaire au build (la page d'accueil lit la base via
+# unstable_cache lors du prerender).
 ARG DATABASE_URL
-ARG TWITTER_VERIFICATION_CODE
+ENV DATABASE_URL=$DATABASE_URL
 
-# Install system dependencies for Puppeteer and Chromium
-RUN apk add --no-cache \
-    chromium \
-    nss \
-    freetype \
-    harfbuzz \
-    ca-certificates \
-    ttf-freefont \
-    curl \
-    wget \
-    tar \
-    brotli
-
-# Set Puppeteer environment variables to use system Chromium
-ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true \
-    PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser
-
-# Set build-time environment variables from ARGs
-ENV USER_EMAIL=$USER_EMAIL \
-    USER_PASSWORD=$USER_PASSWORD \
-    DATABASE_URL=$DATABASE_URL \
-    TWITTER_VERIFICATION_CODE=$TWITTER_VERIFICATION_CODE
+# curl utile pour les health-checks / crons
+RUN apk add --no-cache curl
 
 # Verify Node.js version
 RUN node --version && npm --version
@@ -56,4 +35,4 @@ RUN npm run build
 EXPOSE 3000
 
 # Start the application
-CMD ["npm", "start"] 
+CMD ["npm", "start"]

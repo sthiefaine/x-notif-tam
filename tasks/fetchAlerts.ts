@@ -8,9 +8,15 @@ import {
 import crypto from "crypto";
 import { postToTwitter } from "@/app/api/post_tweets/postTweet";
 
-const ALERT_URL =
-  process.env.ALERT_URL ||
-  "https://data.montpellier3m.fr/TAM_MMM_GTFSRT/Alert.pb";
+// La source TAM a changé de chemin : l'ancien /TAM_MMM_GTFSRT/Alert.pb renvoie 404.
+// Les alertes sont désormais réparties entre le réseau Urbain et Suburbain.
+// ALERT_URL peut surcharger (liste séparée par des virgules).
+const ALERT_URLS = process.env.ALERT_URL
+  ? process.env.ALERT_URL.split(",").map((u) => u.trim()).filter(Boolean)
+  : [
+      "https://data.montpellier3m.fr/GTFS/Urbain/Alert.pb",
+      "https://data.montpellier3m.fr/GTFS/Suburbain/Alert.pb",
+    ];
 
 const PROTO_PATH = path.join(process.cwd(), "lib/gtfs-realtime.proto");
 
@@ -40,11 +46,11 @@ function extractRouteIds(informedEntities: Array<{ routeId?: string }>) {
     .map((entity) => entity.routeId);
 }
 
-async function downloadAlertFile(): Promise<Buffer> {
-  console.log(`Téléchargement des alertes depuis ${ALERT_URL}`);
+async function downloadAlertFile(url: string): Promise<Buffer> {
+  console.log(`Téléchargement des alertes depuis ${url}`);
 
   try {
-    const response = await fetch(ALERT_URL);
+    const response = await fetch(url);
 
     if (!response.ok) {
       throw new Error(
@@ -77,12 +83,12 @@ async function parseAlertFile(buffer: Buffer): Promise<any> {
   }
 }
 
-async function saveAlerts(feedMessage: any): Promise<void> {
+async function saveAlerts(feedMessage: any): Promise<number> {
   try {
     if (!feedMessage.entity || !Array.isArray(feedMessage.entity)) {
       console.log(feedMessage);
       console.warn("Aucune entité trouvée dans le feed message");
-      return;
+      return 0;
     }
 
     const regularAlerts = [];
@@ -114,9 +120,9 @@ async function saveAlerts(feedMessage: any): Promise<void> {
       `${feedMessage.entity.length} alertes traitées (dont ${complementAlerts.length} compléments)`
     );
 
-    if (feedMessage.entity.length > 0) {
-      await triggerTweetPosting();
-    }
+    // Le déclenchement de la publication est fait une seule fois dans
+    // fetchAndProcessAlerts après le traitement de tous les feeds.
+    return feedMessage.entity.length;
   } catch (error) {
     console.error("Erreur lors de la sauvegarde des alertes:", error);
     throw error;
@@ -401,12 +407,25 @@ async function triggerTweetPosting(): Promise<void> {
 export async function fetchAndProcessAlerts(): Promise<void> {
   try {
     await ensurePrismaConnection();
-    
-    const alertBuffer = await downloadAlertFile();
 
-    const feedMessage = await parseAlertFile(alertBuffer);
+    let totalEntities = 0;
 
-    await saveAlerts(feedMessage);
+    // Traiter chaque feed (Urbain + Suburbain). Un feed en échec ne doit pas
+    // empêcher le traitement des autres.
+    for (const url of ALERT_URLS) {
+      try {
+        const alertBuffer = await downloadAlertFile(url);
+        const feedMessage = await parseAlertFile(alertBuffer);
+        totalEntities += await saveAlerts(feedMessage);
+      } catch (feedError) {
+        console.error(`Erreur sur le feed ${url}:`, feedError);
+      }
+    }
+
+    // Déclencher la publication une seule fois, après tous les feeds.
+    if (totalEntities > 0) {
+      await triggerTweetPosting();
+    }
 
     console.log("Traitement des alertes terminé avec succès");
   } catch (error) {
