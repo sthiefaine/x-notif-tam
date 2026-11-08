@@ -52,6 +52,13 @@ export function stopServiceImpacts(alerts: readonly LiveAlert[], stopId: string,
     || (a.nextPeriod?.start ?? "").localeCompare(b.nextPeriod?.start ?? "") || a.alertId.localeCompare(b.alertId));
 }
 
+/** The live map shows current restrictions; a future alert requires an explicit preview. */
+export function selectMapAlerts(alerts: readonly LiveAlert[], now: number, previewId: string | null = null): { alerts: LiveAlert[]; preview: LiveAlert | null } {
+  const current = alerts.filter((alert) => alertTiming(alert, now).temporalStatus === "active");
+  const preview = alerts.find((alert) => alert.id === previewId && alertTiming(alert, now).temporalStatus === "upcoming") || null;
+  return { alerts: preview ? [...current, preview] : current, preview };
+}
+
 const fold = (value: string) => value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
 type Selector = { routeId?: string; stopId?: string; directionId?: number; routeType?: number; agencyId?: string; trip?: { tripId?: string; routeId?: string } };
 

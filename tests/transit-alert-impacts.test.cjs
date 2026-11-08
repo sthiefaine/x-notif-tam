@@ -173,3 +173,44 @@ test("free-text dates never create guessed period bounds", () => {
   assert.deepEqual(plain(impacts.alertTiming(alert, now)), { temporalStatus: "active" });
   assert.equal(impacts.stopImpactForRoute(alert, "2", "33", now).nextPeriod, undefined);
 });
+
+test("the live map excludes future closures even if a cached active flag says otherwise", () => {
+  const current = { id: "current", periods: [{ start: iso(now - 60000), end: iso(now + 60000) }] };
+  const future = { id: "future", active: true, periods: [{ start: iso(now + 120000), end: iso(now + 180000) }] };
+  const view = impacts.selectMapAlerts([current, future], now);
+  assert.deepEqual(plain(view.alerts.map((alert) => alert.id)), ["current"]);
+  assert.equal(view.preview, null);
+  assert.equal(impacts.selectMapAlerts([future], now).alerts.length, 0);
+});
+
+test("only the explicitly chosen future alert is added in preview; returning live removes it", () => {
+  const source = [
+    { id: "current", periods: [] },
+    { id: "chosen", periods: [{ start: iso(now + 60000), end: iso(now + 120000) }] },
+    { id: "other", periods: [{ start: iso(now + 180000), end: iso(now + 240000) }] },
+  ];
+  const view = impacts.selectMapAlerts(source, now, "chosen");
+  assert.deepEqual(plain(view.alerts.map((alert) => alert.id)), ["current", "chosen"]);
+  assert.equal(view.preview.id, "chosen");
+  assert.deepEqual(plain(impacts.selectMapAlerts(source, now, null).alerts.map((alert) => alert.id)), ["current"]);
+});
+
+test("a preview becomes live at its start and disappears exactly at its end", () => {
+  const source = [{ id: "planned", periods: [{ start: iso(now + 60000), end: iso(now + 120000) }] }];
+  assert.equal(impacts.selectMapAlerts(source, now, "planned").preview.id, "planned");
+  const started = impacts.selectMapAlerts(source, now + 60000, "planned");
+  assert.equal(started.preview, null);
+  assert.equal(started.alerts.length, 1);
+  assert.equal(impacts.selectMapAlerts(source, now + 120000, "planned").alerts.length, 0);
+});
+
+test("an expired or uncertain restriction cannot be activated by a stale preview selection", () => {
+  for (const alert of [
+    { id: "a", periods: [{ start: iso(now - 120000), end: iso(now) }] },
+    { id: "a", timingUncertain: true, periods: [] },
+    { id: "a", periods: [{ start: "invalid", end: null }] },
+  ]) {
+    assert.equal(impacts.selectMapAlerts([alert], now, "a").alerts.length, 0);
+    assert.equal(impacts.selectMapAlerts([alert], now, "a").preview, null);
+  }
+});

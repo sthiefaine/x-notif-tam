@@ -518,3 +518,13 @@ button svg,a svg { flex:none; }
 .stop-arrival-card:only-child>span:last-child { text-align:right; }
 .stop-alert-details { margin:14px 0; border-top:1px solid #e6edf4; padding-top:5px; }
 .stop-alert-details summary { min-height:44px; align-content:center; font-size:11px; color:#5f7a9d; cursor:pointer; }
+
+.map-upcoming-button { position:absolute; z-index:5; top:16px; left:18px; display:flex; align-items:center; gap:7px; min-height:44px; padding:10px 12px; border:1px solid #e7d49c; border-radius:11px; background:#fffcf3f5; color:#927022; box-shadow:0 2px 9px #29486409; font-size:12px; font-weight:650; }
+.map-upcoming-button>span { min-width:20px; padding:2px 5px; border-radius:8px; background:#f4e7c5; font-size:10px; text-align:center; }
+.map-future-preview { position:absolute; z-index:5; top:16px; left:18px; display:flex; align-items:center; gap:10px; max-width:calc(100% - 100px); padding:10px 12px; border:1px solid #e0c57e; border-radius:12px; background:#fff9e9f7; color:#8f6a1b; box-shadow:0 3px 12px #29486412; }
+.map-future-preview>span { display:grid; gap:4px; }
+.map-future-preview strong { font-size:12px; }
+.map-future-preview small { font-size:10px; }
+.map-future-preview>svg { flex-shrink:0; }
+.map-future-preview button { flex-shrink:0; min-height:40px; padding:8px 10px; border:1px solid #e1cf9a; border-radius:9px; background:#fff; color:#725721; font-size:11px; font-weight:600; }
+@media (max-width:700px) { .map-upcoming-button,.map-future-preview { top:14px; left:13px; } .map-future-preview { flex-wrap:wrap; gap:7px; padding:9px; } .map-future-preview button { min-height:36px; } }
