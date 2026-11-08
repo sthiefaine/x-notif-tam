@@ -3,6 +3,7 @@ const fs = require("node:fs/promises");
 const { existsSync } = require("node:fs");
 const path = require("node:path");
 const crypto = require("node:crypto");
+const os = require("node:os");
 const readline = require("node:readline/promises");
 const { spawn: spawnChild } = require("node:child_process");
 
@@ -48,23 +49,39 @@ async function privateDirectory(directory) {
   await fs.chmod(directory, 0o700);
 }
 
-async function hasProfileLock(directory) {
+async function hasProfileLock(directory, {
+  hostname = os.hostname(),
+  probe = (pid, signal) => process.kill(pid, signal),
+} = {}) {
+  const filename = path.join(directory, "SingletonLock");
   try {
-    await fs.lstat(path.join(directory, "SingletonLock"));
-    return true;
+    const entry = await fs.lstat(filename);
+    if (!entry.isSymbolicLink()) return true;
+    const owner = /^(.*)-([1-9]\d*)$/.exec(await fs.readlink(filename));
+    if (!owner || owner[1] !== hostname) return true;
+    const pid = Number(owner[2]);
+    if (!Number.isSafeInteger(pid) || pid > 2_147_483_647) return true;
+    try {
+      // Signal 0 only checks the owner on this host. Never signal a PID read
+      // from a lock, and leave a stale lock for Chrome itself to handle.
+      probe(pid, 0);
+      return true;
+    } catch (error) {
+      return error.code !== "ESRCH";
+    }
   } catch (error) {
     if (error.code === "ENOENT") return false;
-    throw error;
+    return true;
   }
 }
 
-async function prepareLoginProfile(projectDirectory) {
+async function prepareLoginProfile(projectDirectory, lockOptions) {
   const root = await fs.realpath(projectDirectory);
   const privateRoot = path.join(root, ".x-browser");
   const directory = path.join(privateRoot, "login-profile");
   await privateDirectory(privateRoot);
   await privateDirectory(directory);
-  if (await hasProfileLock(directory)) {
+  if (await hasProfileLock(directory, lockOptions)) {
     throw new LoginError("Le profil Chrome dédié est déjà ouvert ou verrouillé. Fermez ce Chrome manuellement puis relancez la commande.");
   }
   return directory;
@@ -142,9 +159,9 @@ async function waitForBrowserExit(manual, { timeoutMs = 10_000 } = {}) {
   }
 }
 
-async function waitForProfileUnlock(directory, { timeoutMs = 5_000, intervalMs = 100 } = {}) {
+async function waitForProfileUnlock(directory, { timeoutMs = 5_000, intervalMs = 100, ...lockOptions } = {}) {
   const deadline = Date.now() + timeoutMs;
-  while (await hasProfileLock(directory)) {
+  while (await hasProfileLock(directory, lockOptions)) {
     if (Date.now() >= deadline) {
       throw new LoginError("Le profil Chrome dédié reste verrouillé. Fermez ce Chrome manuellement puis relancez la commande.");
     }
@@ -169,7 +186,8 @@ async function verifyAccount(page, expectedHandle) {
   if (await challenges.count() > 0) {
     throw new LoginError("X affiche une vérification. Terminez-la manuellement avant de recommencer.");
   }
-  const profile = page.locator('a[data-testid="AppTabBar_Profile_Link"]').first();
+  const profile = page.locator('a[data-testid="AppTabBar_Profile_Link"]')
+    .or(page.getByRole("link", { name: /^(Profile|Profil)$/i })).first();
   try {
     await profile.waitFor({ state: "visible", timeout: 15_000 });
   } catch {
@@ -321,6 +339,6 @@ if (require.main === module) {
 
 module.exports = {
   LoginError, normalizeHandle, findChromeExecutable, isRestrictedUrl,
-  prepareLoginProfile, launchManualChrome, waitForBrowserExit, waitForProfileUnlock,
+  hasProfileLock, prepareLoginProfile, launchManualChrome, waitForBrowserExit, waitForProfileUnlock,
   verifyAccount, saveSessionFile, scopeSessionToX, runLogin,
 };

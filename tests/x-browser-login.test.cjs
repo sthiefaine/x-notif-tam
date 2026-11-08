@@ -7,17 +7,31 @@ const { EventEmitter } = require("node:events");
 const {
   normalizeHandle, findChromeExecutable, isRestrictedUrl, runLogin, saveSessionFile, scopeSessionToX,
   prepareLoginProfile, launchManualChrome, waitForBrowserExit, waitForProfileUnlock,
+  hasProfileLock,
 } = require("../scripts/x-browser-login.cjs");
 
-function browserFixture({ href = "/TestBot", challenge = false, url = "https://x.com/home", cookies, origins = [] } = {}) {
+function browserFixture({ href = "/TestBot", challenge = false, url = "https://x.com/home", cookies, origins = [], semanticOnly = false } = {}) {
   const calls = { spawns: [], contexts: [], navigations: [], saved: [], output: [], signals: [], events: [], prompts: 0, closed: 0, snapshots: 0 };
-  const profile = { waitFor: async () => {}, getAttribute: async () => href };
+  const profile = { first: () => profile, waitFor: async () => {}, getAttribute: async () => href };
+  const legacyProfile = {
+    first: () => legacyProfile,
+    or: (other) => semanticOnly ? other : profile,
+    waitFor: async () => { if (semanticOnly) throw new Error("Missing testid"); },
+    getAttribute: async () => href,
+  };
   const page = {
     goto: async (target) => calls.navigations.push(target),
     url: () => url,
     locator: (selector) => selector.startsWith("iframe")
       ? { count: async () => challenge ? 1 : 0 }
-      : { first: () => profile },
+      : legacyProfile,
+    getByRole: (role, { name }) => {
+      assert.equal(role, "link");
+      assert.equal(name.test("Profile"), true);
+      assert.equal(name.test("Profil"), true);
+      assert.equal(name.test("A profile in the feed"), false);
+      return profile;
+    },
   };
   const context = {
     pages: () => [page],
@@ -93,6 +107,15 @@ test("launches ordinary Chrome with only the dedicated profile, first-run flag a
   assert.equal(result.filename, "/test-project/.x-browser/session.json");
   assert.equal(calls.closed, 1);
   assert.ok(!calls.output.join(" ").includes("test-only-cookie"));
+});
+
+test("verifies the exact semantic Profile link when legacy test IDs are absent", async () => {
+  const valid = browserFixture({ semanticOnly: true });
+  await runLogin(valid.options);
+  assert.equal(valid.calls.saved.length, 1);
+  const wrong = browserFixture({ semanticOnly: true, href: "/different_account" });
+  await assert.rejects(runLogin(wrong.options), /ne correspond pas/);
+  assert.equal(wrong.calls.saved.length, 0);
 });
 
 test("does not attach Playwright before confirmation, process exit and profile unlock", async () => {
@@ -219,6 +242,70 @@ test("a persistent lock prevents Playwright attachment and is not removed", asyn
     options.waitForUnlock = () => waitForProfileUnlock(profile, { timeoutMs: 0 });
     await assert.rejects(runLogin(options), /reste verrouillé/);
     assert.equal(calls.contexts.length, 0);
+  });
+});
+
+test("accepts a stale same-host Chrome lock only after a signal-0 ESRCH probe, without removing it", async () => {
+  await temporaryDirectory(async (directory) => {
+    const profile = await prepareLoginProfile(directory);
+    const filename = path.join(profile, "SingletonLock");
+    const target = "test-machine-12345";
+    await fs.symlink(target, filename);
+    const probes = [];
+    const options = {
+      hostname: "test-machine",
+      probe: (pid, signal) => {
+        probes.push([pid, signal]);
+        throw Object.assign(new Error("fake absent owner"), { code: "ESRCH" });
+      },
+    };
+    assert.equal(await hasProfileLock(profile, options), false);
+    assert.equal(await prepareLoginProfile(directory, options), profile);
+    await waitForProfileUnlock(profile, { timeoutMs: 0, ...options });
+    assert.deepEqual(probes, [[12345, 0], [12345, 0], [12345, 0]]);
+    assert.equal(await fs.readlink(filename), target);
+  });
+});
+
+test("keeps live, inaccessible and unknown lock owners active", async () => {
+  await temporaryDirectory(async (directory) => {
+    const profile = await prepareLoginProfile(directory);
+    const filename = path.join(profile, "SingletonLock");
+    await fs.symlink("test-machine-12345", filename);
+    let probes = 0;
+    for (const code of [undefined, "EPERM", "EACCES", "EINVAL"]) {
+      const options = {
+        hostname: "test-machine",
+        probe: (pid, signal) => {
+          probes++;
+          assert.equal(pid, 12345);
+          assert.equal(signal, 0);
+          if (code) throw Object.assign(new Error("fake owner status"), { code });
+          return true;
+        },
+      };
+      assert.equal(await hasProfileLock(profile, options), true);
+      await assert.rejects(prepareLoginProfile(directory, options), /verrouillé/);
+    }
+    assert.equal(probes, 8);
+    assert.equal(await fs.readlink(filename), "test-machine-12345");
+  });
+});
+
+test("never probes foreign-host, malformed or non-symlink Chrome locks", async () => {
+  await temporaryDirectory(async (directory) => {
+    const profile = await prepareLoginProfile(directory);
+    const filename = path.join(profile, "SingletonLock");
+    const options = { hostname: "test-machine", probe: () => assert.fail("untrusted lock owner must not be probed") };
+    for (const target of ["other-machine-12345", "missing-pid", "test-machine-0", "test-machine--5", "test-machine-9999999999999999999999"]) {
+      await fs.symlink(target, filename);
+      assert.equal(await hasProfileLock(profile, options), true);
+      assert.equal(await fs.readlink(filename), target);
+      await fs.unlink(filename);
+    }
+    await fs.writeFile(filename, "test-only lock metadata");
+    assert.equal(await hasProfileLock(profile, options), true);
+    assert.equal(await fs.readFile(filename, "utf8"), "test-only lock metadata");
   });
 });
 

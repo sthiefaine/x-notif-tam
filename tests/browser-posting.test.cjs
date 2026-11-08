@@ -16,6 +16,8 @@ function fixture(options = {}) {
     account: "Test Bot\n@testbot",
     profile: "/testbot",
     hasSwitcher: true,
+    semanticOnly: false,
+    roleUses: [],
     challenge: false,
     loginInput: false,
     launches: 0,
@@ -37,34 +39,52 @@ function fixture(options = {}) {
     headers: () => ({ "retry-after": "60" }),
     json: async () => state.body,
   };
+  function makeLocator(selector, available) {
+    const requireAvailable = () => {
+      if (!available) throw new Error("Missing selector in test DOM");
+      if (selector.startsWith("role:")) state.roleUses.push(selector);
+    };
+    const locator = {
+      first: () => locator,
+      or: (other) => available ? locator : other,
+      count: async () => {
+        if (!available) return 0;
+        if (selector.startsWith("iframe")) return state.challenge ? 1 : 0;
+        if (selector.startsWith("input")) return state.loginInput ? 1 : 0;
+        if (selector === '[data-testid="SideNav_AccountSwitcher_Button"]') return state.hasSwitcher ? 1 : 0;
+        return 1;
+      },
+      innerText: async () => { requireAvailable(); return state.account; },
+      getAttribute: async (name) => { requireAvailable(); assert.equal(name, "href"); return state.profile; },
+      waitFor: async () => { requireAvailable(); },
+      fill: async (text) => {
+        requireAvailable();
+        if (state.fillError) throw state.fillError;
+        state.fills.push(text);
+      },
+      click: async () => {
+        requireAvailable();
+        state.clicks++;
+        if (state.clickError) throw state.clickError;
+      },
+    };
+    return locator;
+  }
   const page = {
     url: () => state.url,
     goto: async (url, settings) => {
       assert.equal(url, "https://x.com/home");
       assert.equal(settings.waitUntil, "domcontentloaded");
     },
-    locator: (selector) => {
-      const locator = {
-        first: () => locator,
-        count: async () => {
-          if (selector.startsWith("iframe")) return state.challenge ? 1 : 0;
-          if (selector.startsWith("input")) return state.loginInput ? 1 : 0;
-          if (selector === '[data-testid="SideNav_AccountSwitcher_Button"]') return state.hasSwitcher ? 1 : 0;
-          return 1;
-        },
-        innerText: async () => state.account,
-        getAttribute: async (name) => { assert.equal(name, "href"); return state.profile; },
-        waitFor: async () => {},
-        fill: async (text) => {
-          if (state.fillError) throw state.fillError;
-          state.fills.push(text);
-        },
-        click: async () => {
-          state.clicks++;
-          if (state.clickError) throw state.clickError;
-        },
-      };
-      return locator;
+    locator: (selector) => makeLocator(selector, !(state.semanticOnly && selector.includes("data-testid"))),
+    getByRole: (role, settings) => {
+      const labels = state.french
+        ? { link: "Profil", textbox: "Texte du post", button: "Publier" }
+        : { link: "Profile", textbox: "Post text", button: "Post" };
+      assert.ok(labels[role]);
+      assert.equal(settings.name.test(labels[role]), true);
+      assert.equal(settings.name.test(`Other ${labels[role]} content`), false);
+      return makeLocator(`role:${role}`, true);
     },
     waitForResponse: (predicate, settings) => {
       assert.equal(settings.timeout < 60_000, true);
@@ -189,6 +209,25 @@ test("the exact profile link can verify identity when the account switcher is ab
   assert.deepEqual(state.fills, ["test"]);
   assert.equal(state.contextClosed, 1);
   assert.equal(state.browserClosed, 1);
+});
+
+test("semantic profile, composer and submit roles work without legacy test IDs in English and French", async () => {
+  for (const french of [false, true]) {
+    const { client, state } = fixture({ state: { semanticOnly: true, french } });
+    const result = await client.postToBrowser("semantic post");
+    assert.equal(result.success, true);
+    assert.equal(state.roleUses.includes("role:link"), true);
+    assert.equal(state.roleUses.includes("role:textbox"), true);
+    assert.equal(state.roleUses.includes("role:button"), true);
+    assert.equal(state.clicks, 1);
+  }
+});
+
+test("semantic profile role still requires the exact expected account href", async () => {
+  const { client, state } = fixture({ state: { semanticOnly: true, profile: "/different_account" } });
+  const result = await client.postToBrowser("test");
+  assert.equal(result.error.code, "ACCOUNT_MISMATCH");
+  assert.equal(state.clicks, 0);
 });
 
 test("a clicked button is insufficient without a CreateTweet rest_id", async () => {

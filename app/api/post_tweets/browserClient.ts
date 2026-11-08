@@ -92,7 +92,8 @@ const assertAccount = async (page: Page): Promise<void> => {
     }
   }
 
-  const profile = page.locator('a[data-testid="AppTabBar_Profile_Link"]').first();
+  const profile = page.locator('a[data-testid="AppTabBar_Profile_Link"]')
+    .or(page.getByRole("link", { name: /^(Profile|Profil)$/i })).first();
   const href = await profile.getAttribute("href", { timeout: 5_000 });
   if (href) {
     const url = new URL(href, "https://x.com");
@@ -246,6 +247,7 @@ export const createBrowserPublisher = async (): Promise<{
       await ensureOpen();
       await assertSession(page);
       await page.locator('[data-testid="SideNav_AccountSwitcher_Button"], a[data-testid="AppTabBar_Profile_Link"]')
+        .or(page.getByRole("link", { name: /^(Profile|Profil)$/i }))
         .first().waitFor({ state: "visible", timeout: 8_000 });
       await assertAccount(page);
       await ensureOpen();
@@ -280,7 +282,9 @@ export const createBrowserPublisher = async (): Promise<{
           await assertSession(page);
           await assertAccount(page);
           await ensureOpen();
-          await page.locator('[data-testid="tweetTextarea_0"]').first().fill(text);
+          await page.locator('[data-testid="tweetTextarea_0"]')
+            .or(page.getByRole("textbox", { name: /^(Post text|Texte du post|Texte de la publication)$/i }))
+            .first().fill(text);
           await assertSession(page);
           await ensureOpen();
 
@@ -294,7 +298,9 @@ export const createBrowserPublisher = async (): Promise<{
           // Évite un rejet non géré si le clic échoue avant l'attente ci-dessous.
           void confirmation.catch(() => undefined);
           submissionStarted = true;
-          await page.locator('[data-testid="tweetButtonInline"]').first().click({ timeout: 5_000 });
+          await page.locator('[data-testid="tweetButtonInline"]')
+            .or(page.getByRole("button", { name: /^(Post|Publier)$/i }))
+            .first().click({ timeout: 5_000 });
           const id = await getConfirmedTweetId(await confirmation);
           return { success: true as const, message: "Tweet publié via le navigateur", id };
         })(), RUN_TIMEOUT);

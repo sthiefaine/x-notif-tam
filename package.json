@@ -9,6 +9,7 @@
     "lint": "eslint .",
     "test": "node --test tests/*.test.cjs",
     "x:login": "node --env-file-if-exists=.env scripts/x-browser-login.cjs",
+    "x:save-session": "node --env-file-if-exists=.env scripts/x-save-session.cjs",
     "prisma:generate": "prisma generate",
     "vercel-build": "npx prisma generate && next build"
   },
