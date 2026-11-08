@@ -12,13 +12,14 @@ CRON_SECRET=un-secret-long-et-aleatoire
 X_POSTING_MODE=disabled
 X_ACCOUNT_HANDLE=NomDuCompte
 X_BROWSER_SESSION_PATH=.x-browser/session.json
+X_BROWSER_AUTO_RELOGIN=false
 ```
 
-La collecte fonctionne sans publication lorsque `X_POSTING_MODE=disabled`. Les anciennes variables de mot de passe et les codes de vérification ne sont pas utilisés pour une connexion automatique. `USER_HANDLE` reste accepté si `X_ACCOUNT_HANDLE` n'est pas renseigné.
+La collecte fonctionne sans publication lorsque `X_POSTING_MODE=disabled`. `USER_HANDLE` reste accepté si `X_ACCOUNT_HANDLE` n'est pas renseigné. La reprise de connexion est désactivée par défaut ; `USER_PASSWORD` sert uniquement si `X_BROWSER_AUTO_RELOGIN=true`. L'adresse e-mail, le téléphone et les anciens codes de vérification ne servent pas à cette reprise.
 
 ## Session navigateur réutilisable
 
-Ce mode utilise Chrome ou Chromium avec `playwright-core`, sans appel à l'API officielle facturée. Il ne garantit pas la fiabilité de la publication : l'interface et les sessions X peuvent changer. Les [règles d'automatisation de X](https://help.x.com/fr/rules-and-policies/x-automation) interdisent l'automatisation du site hors API et prévoient notamment une suspension du compte. Le code ne contourne pas les écrans de connexion ou les vérifications et s'arrête si ceux-ci apparaissent.
+Ce mode utilise Chrome ou Chromium avec `playwright-core`, sans appel à l'API officielle facturée. Il ne garantit pas la fiabilité de la publication : l'interface et les sessions X peuvent changer. Les [règles d'automatisation de X](https://help.x.com/fr/rules-and-policies/x-automation) interdisent l'automatisation du site hors API et prévoient notamment une suspension du compte. Le code ne contourne aucune vérification X et s'arrête si un code, un CAPTCHA ou une limitation apparaît.
 
 Pour préparer la session sur votre ordinateur :
 
@@ -37,9 +38,13 @@ Si la réouverture du profil affiche à nouveau la connexion, lancer `npm run x:
 
 `CHROMIUM_EXECUTABLE_PATH` permet d'indiquer un navigateur installé. Sinon, la commande essaie l'ancien `PUPPETEER_EXECUTABLE_PATH` s'il existe, puis les emplacements usuels de Chrome sur macOS et de Chromium sur Linux. Si aucun binaire n'est trouvé, elle s'arrête avant tout lancement. Un ancien `/usr/bin/chromium-browser` absent peut ainsi être remplacé par `/usr/bin/chromium` disponible sur Debian.
 
-Pour le serveur Coolify, transférer le fichier de session par un canal privé et le placer dans un stockage persistant monté dans le conteneur, lisible par l'utilisateur de l'application. Configurer `X_BROWSER_SESSION_PATH` avec le chemin de ce fichier **dans le conteneur**, `X_ACCOUNT_HANDLE` avec le même compte et `X_POSTING_MODE=browser`. Ne pas mettre le JSON de session dans une variable d'environnement ou dans le dépôt. Une session expirée exige une nouvelle connexion manuelle locale et un nouveau transfert. Le navigateur est réutilisé pendant un lot de publications afin de limiter les démarrages.
+Pour le serveur Coolify, transférer le fichier de session par un canal privé et le placer dans un stockage persistant monté dans le conteneur, lisible par l'utilisateur de l'application. Configurer `X_BROWSER_SESSION_PATH` avec le chemin de ce fichier **dans le conteneur**, `X_ACCOUNT_HANDLE` avec le même compte et `X_POSTING_MODE=browser`. Ne pas mettre le JSON de session dans une variable d'environnement ou dans le dépôt. Le navigateur est réutilisé pendant un lot de publications afin de limiter les démarrages.
 
-L'application propose un transfert authentifié : `POST /api/x-session`, avec `Content-Type: application/json` et `Authorization: Bearer <CRON_SECRET>`, reçoit le contenu du fichier local. Utiliser exclusivement l'adresse **HTTPS** de l'application. La destination est imposée par `X_BROWSER_SESSION_PATH` sur le serveur ; le fichier est écrit atomiquement dans le volume persistant avec des permissions privées. La requête est limitée à 128 Kio et refuse les données hors des domaines X ou un jeton de session expiré. La réponse ne contient aucune valeur de cookie. `GET /api/x-session`, avec la même authentification, ouvre le navigateur pour vérifier le compte attendu puis le ferme, sans publier. Un transfert réussi ne suffit pas : attendre `ready: true` avant d'activer la tâche de publication.
+Pour autoriser une reprise automatique, configurer `X_BROWSER_AUTO_RELOGIN=true` et `USER_PASSWORD` dans Coolify. Lorsqu'un écran de connexion confirme l'expiration de la session enregistrée, le bot tente une seule connexion avec le **nom d'utilisateur** attendu, puis le mot de passe. Il vérifie le compte exact et la présence d'une session X valide avant de remplacer le fichier avec des permissions `0600`. Aucun nouvel envoi n'est lancé pendant cette préparation.
+
+Un marqueur privé persistant dans le même volume réserve cette tentative avant la navigation de connexion. Les tâches suivantes et les redémarrages ne recommencent pas pour le même fichier de session, même si la tentative échoue ou si le processus s'arrête. Une session importée ou renouvelée possède une nouvelle empreinte et pourra à son tour bénéficier d'une tentative lorsqu'elle expirera. Un code e-mail, une demande de téléphone, un CAPTCHA, une limitation X ou un état ambigu arrête le parcours ; une intervention manuelle reste alors nécessaire. Ne pas effacer les marqueurs pour multiplier les essais.
+
+L'application propose un transfert authentifié : `POST /api/x-session`, avec `Content-Type: application/json` et `Authorization: Bearer <CRON_SECRET>`, reçoit le contenu du fichier local. Utiliser exclusivement l'adresse **HTTPS** de l'application. La destination est imposée par `X_BROWSER_SESSION_PATH` sur le serveur ; le fichier est écrit atomiquement dans le volume persistant avec des permissions privées. La requête est limitée à 128 Kio et refuse les données hors des domaines X ou un jeton de session expiré. La réponse ne contient aucune valeur de cookie. `GET /api/x-session`, avec la même authentification, ouvre le navigateur pour vérifier le compte attendu puis le ferme, sans publier. Cette vérification peut consommer la tentative de reconnexion si la reprise est activée et si la session a expiré. Un transfert réussi ne suffit pas : attendre `ready: true` avant d'activer la tâche de publication.
 
 ## API officielle facultative
 

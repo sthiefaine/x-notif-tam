@@ -5,7 +5,7 @@ import { createBrowserPublisher, normalizeBrowserFailure } from "@/app/api/post_
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-export const maxDuration = 45;
+export const maxDuration = 65;
 
 const MAX_BODY_BYTES = 128 * 1024;
 type JsonRecord = Record<string, unknown>;

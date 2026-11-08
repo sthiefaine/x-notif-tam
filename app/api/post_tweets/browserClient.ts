@@ -2,6 +2,10 @@ import { accessSync, constants, statSync } from "node:fs";
 import { chromium } from "playwright-core";
 import type { Browser, BrowserContext, Page, Response } from "playwright-core";
 import type { XApiError } from "./xApiClient";
+import {
+  readSessionSnapshot, claimSessionRecovery, saveRecoveredSession, SessionRecoveryError,
+  type SessionSnapshot,
+} from "./browserSessionRecovery";
 
 const RUN_TIMEOUT = 30_000;
 const CLOSE_TIMEOUT = 2_000;
@@ -59,24 +63,51 @@ const fail = (status: number, code: string, detail: string): never => {
   throw new BrowserPublicationError({ status, code, detail });
 };
 
-const assertSession = async (page: Page): Promise<void> => {
-  const path = new URL(page.url()).pathname;
-  if (/^\/(?:i\/flow\/login|i\/jf\/onboarding\/web|login)(?:\/|$)/i.test(path)) {
-    fail(401, "SESSION_REQUIRED", "La session X doit être renouvelée manuellement.");
+const rateLimitMessage = /nous avons temporairement limit[ée] votre connexion|(?:we(?:[’']ve| have) )?temporarily limited your (?:login|sign.?in)|too many (?:login|sign.?in) attempts|login (?:is )?temporarily limited/i;
+const verificationMessage = /enter (?:the |your )?(?:verification|confirmation|authentication|security) code|code de (?:v[ée]rification|confirmation)|code d[’']authentification|verify your identity|v[ée]rifiez votre identit[ée]|enter your (?:phone number|email address)/i;
+
+const assertNoLoginBarriers = async (page: Page): Promise<void> => {
+  const url = new URL(page.url());
+  const path = url.pathname;
+  if (url.protocol !== "https:" || !["x.com", "www.x.com"].includes(url.hostname)) {
+    fail(403, "ACCOUNT_CHALLENGE", "La navigation X ne permet pas une connexion automatique sûre.");
+  }
+  const loginRoute = /^\/(?:i\/flow\/login|i\/jf\/onboarding\/web|login)(?:\/|$)/i.test(path);
+  const authForm = await page.locator('input[autocomplete="username"], input[type="password"], input[autocomplete="one-time-code"]').count() > 0;
+  // Sur l'accueil, un post peut citer ces phrases : seuls les dialogs/alerts
+  // sont des signaux d'authentification, jamais le texte de la timeline.
+  const messages = loginRoute || authForm ? page : page.getByRole("dialog").or(page.getByRole("alert"));
+  if (await messages.getByText(rateLimitMessage).count() > 0) {
+    fail(429, "LOGIN_RATE_LIMIT", "X limite temporairement les connexions. Aucun nouvel essai automatique.");
   }
   const challenge = page.locator(
     'iframe[src*="arkoselabs"], iframe[src*="recaptcha"], iframe[src*="hcaptcha"], iframe[title*="challenge" i]'
   );
   if (
-    /^\/(?:i\/flow\/|account\/(?:access|suspended|login_verification))/i.test(path) ||
-    await challenge.count() > 0
+    (/^\/i\/flow\//i.test(path) && !/^\/i\/flow\/login\/?$/i.test(path)) ||
+    /^\/account\/(?:access|suspended|login_verification)/i.test(path) ||
+    (/^\/i\/jf\/onboarding\/web\/?$/i.test(path) && url.searchParams.get("mode") !== "login") ||
+    await challenge.count() > 0 ||
+    await page.locator('input[autocomplete="one-time-code"], input[name="challenge_response"], input[type="tel"], input[type="email"], input[name="verification_code"]').count() > 0 ||
+    await messages.getByText(verificationMessage).count() > 0
   ) {
     fail(403, "ACCOUNT_CHALLENGE", "X demande une vérification manuelle du compte.");
+  }
+};
+
+const assertSession = async (page: Page): Promise<void> => {
+  await assertNoLoginBarriers(page);
+  const path = new URL(page.url()).pathname;
+  if (/^\/(?:i\/flow\/login|i\/jf\/onboarding\/web|login)(?:\/|$)/i.test(path)) {
+    fail(401, "SESSION_REQUIRED", "La session X doit être renouvelée.");
   }
   if (await page.locator('input[name="password"], input[autocomplete="username"]').count() > 0) {
     fail(401, "SESSION_REQUIRED", "La session X doit être renouvelée manuellement.");
   }
 };
+
+const accountNavigation = (page: Page) => page.locator('[data-testid="SideNav_AccountSwitcher_Button"], a[data-testid="AppTabBar_Profile_Link"]')
+  .or(page.getByRole("link", { name: /^(Profile|Profil)$/i })).first();
 
 const assertAccount = async (page: Page): Promise<void> => {
   const expected = getAccountHandle().toLowerCase();
@@ -104,6 +135,64 @@ const assertAccount = async (page: Page): Promise<void> => {
   }
   fail(409, "ACCOUNT_UNVERIFIED", "Impossible de confirmer le compte X ouvert.");
 };
+
+async function recoverExpiredSession(
+  page: Page, context: BrowserContext, snapshot: SessionSnapshot,
+  checkActive: () => void, remaining: (maximum: number) => number,
+): Promise<void> {
+  if (process.env.X_BROWSER_AUTO_RELOGIN?.trim().toLowerCase() !== "true") {
+    fail(401, "SESSION_REQUIRED", "La session X doit être renouvelée manuellement ; reconnexion automatique désactivée.");
+  }
+  const password = process.env.USER_PASSWORD;
+  if (!password) fail(401, "SESSION_REQUIRED", "La session X a expiré et USER_PASSWORD n'est pas configuré.");
+  await assertNoLoginBarriers(page);
+  checkActive();
+  // Cette réservation durable précède même la navigation vers le formulaire.
+  claimSessionRecovery(snapshot, checkActive);
+  const navigation = await page.goto("https://x.com/i/jf/onboarding/web?mode=login", {
+    waitUntil: "domcontentloaded", timeout: remaining(10_000),
+  });
+  checkActive();
+  if (navigation?.status() === 429) fail(429, "LOGIN_RATE_LIMIT", "X limite temporairement les connexions. Aucun nouvel essai automatique.");
+  if (navigation?.status() === 403) fail(403, "ACCOUNT_CHALLENGE", "X demande une vérification manuelle du compte.");
+  await assertNoLoginBarriers(page);
+  const username = page.locator('input[autocomplete="username"]').first();
+  await username.waitFor({ state: "visible", timeout: remaining(5_000) });
+  await assertNoLoginBarriers(page);
+  checkActive();
+  await username.fill(getAccountHandle(), { timeout: remaining(5_000) });
+  checkActive();
+  await page.getByRole("button", { name: /^(Next|Continue|Suivant|Continuer)$/i }).click({ timeout: remaining(5_000) });
+  await assertNoLoginBarriers(page);
+  const passwordField = page.locator('input[type="password"][name="password"], input[type="password"][autocomplete="current-password"]').first();
+  try {
+    await passwordField.waitFor({ state: "visible", timeout: remaining(6_000) });
+  } catch (error) {
+    await assertNoLoginBarriers(page);
+    throw error;
+  }
+  await assertNoLoginBarriers(page);
+  checkActive();
+  await passwordField.fill(password!, { timeout: remaining(5_000) });
+  await assertNoLoginBarriers(page);
+  checkActive();
+  await page.getByRole("button", { name: /^(Log in|Se connecter|Continue|Continuer)$/i }).click({ timeout: remaining(5_000) });
+  try {
+    await page.waitForURL((url) => url.protocol === "https:" && ["x.com", "www.x.com"].includes(url.hostname)
+      && /^\/home\/?$/.test(url.pathname), { timeout: remaining(10_000) });
+  } catch (error) {
+    await assertNoLoginBarriers(page);
+    throw error;
+  }
+  checkActive();
+  await assertSession(page);
+  await accountNavigation(page).waitFor({ state: "visible", timeout: remaining(5_000) });
+  await assertAccount(page);
+  checkActive();
+  const state = await context.storageState();
+  checkActive();
+  saveRecoveredSession(snapshot, state, checkActive);
+}
 
 const asRecord = (value: unknown): Record<string, unknown> =>
   value !== null && typeof value === "object" ? value as Record<string, unknown> : {};
@@ -176,6 +265,8 @@ export type BrowserPostResult =
 export const normalizeBrowserFailure = (failure: unknown): Extract<BrowserPostResult, { success: false }> => {
   const error: XApiError = failure instanceof BrowserPublicationError
     ? failure.details
+    : failure instanceof SessionRecoveryError
+      ? { status: failure.status, code: failure.code, detail: failure.message }
     : {
       status: failure instanceof Error && failure.name === "TimeoutError" ? 504 : 503,
       code: failure instanceof Error && failure.name === "TimeoutError" ? "BROWSER_TIMEOUT" : "BROWSER_FAILED",
@@ -202,7 +293,7 @@ const withDeadline = async <T>(operation: Promise<T>, timeout: number): Promise<
   }
 };
 
-/** Une seule session navigateur pour un lot ; aucune connexion automatique. */
+/** Une session par lot ; au plus une reconnexion par empreinte de session expirée. */
 export const createBrowserPublisher = async (): Promise<{
   postText: (text: string) => Promise<BrowserPostResult>;
   close: () => Promise<void>;
@@ -218,6 +309,16 @@ export const createBrowserPublisher = async (): Promise<{
   let page: Page;
   let closed = false;
   let busy = false;
+  const deadline = Date.now() + 50_000;
+  const checkActive = () => {
+    if (closed || Date.now() >= deadline) {
+      fail(504, "BROWSER_TIMEOUT", "Le délai de préparation de la session X est écoulé.");
+    }
+  };
+  const remaining = (maximum: number) => {
+    checkActive();
+    return Math.max(1, Math.min(maximum, deadline - Date.now()));
+  };
   const close = async () => {
     if (closed) return;
     closed = true;
@@ -233,25 +334,47 @@ export const createBrowserPublisher = async (): Promise<{
   };
 
   try {
+    const snapshot = readSessionSnapshot(process.env.X_BROWSER_SESSION_PATH!.trim());
+    const initializationTimeout = remaining(50_000);
     await withDeadline((async () => {
       browser = await chromium.launch({
         executablePath: getExecutablePath(), headless: true, timeout: 10_000,
       });
       await ensureOpen();
-      context = await browser.newContext({ storageState: process.env.X_BROWSER_SESSION_PATH!.trim() });
+      context = await browser.newContext({ storageState: snapshot.state });
       await ensureOpen();
       context.setDefaultTimeout(8_000);
       page = await context.newPage();
       await ensureOpen();
-      await page.goto("https://x.com/home", { waitUntil: "domcontentloaded", timeout: 15_000 });
+      const navigation = await page.goto("https://x.com/home", { waitUntil: "domcontentloaded", timeout: remaining(15_000) });
       await ensureOpen();
-      await assertSession(page);
-      await page.locator('[data-testid="SideNav_AccountSwitcher_Button"], a[data-testid="AppTabBar_Profile_Link"]')
-        .or(page.getByRole("link", { name: /^(Profile|Profil)$/i }))
-        .first().waitFor({ state: "visible", timeout: 8_000 });
+      if (navigation?.status() === 429) fail(429, "LOGIN_RATE_LIMIT", "X limite temporairement les connexions. Aucun nouvel essai automatique.");
+      if (navigation?.status() === 403) fail(403, "ACCOUNT_CHALLENGE", "X demande une vérification manuelle du compte.");
+      let recovered = false;
+      const checkOrRecover = async () => {
+        checkActive();
+        try {
+          await assertSession(page);
+        } catch (failure) {
+          if (recovered || !(failure instanceof BrowserPublicationError) || failure.details.code !== "SESSION_REQUIRED") throw failure;
+          recovered = true;
+          await recoverExpiredSession(page, context!, snapshot, checkActive, remaining);
+        }
+      };
+      await checkOrRecover();
+      try {
+        await accountNavigation(page).waitFor({ state: "visible", timeout: remaining(8_000) });
+      } catch (failure) {
+        // Une redirection de connexion peut arriver après domcontentloaded.
+        // Seul un état désormais explicite autorise la reprise, pas un timeout.
+        const alreadyRecovered = recovered;
+        await checkOrRecover();
+        if (alreadyRecovered === recovered) throw failure;
+        await accountNavigation(page).waitFor({ state: "visible", timeout: remaining(8_000) });
+      }
       await assertAccount(page);
       await ensureOpen();
-    })(), 20_000);
+    })(), initializationTimeout);
   } catch (failure) {
     await close();
     throw new BrowserPublicationError(normalizeBrowserFailure(failure).error);

@@ -50,6 +50,7 @@ function fixture(options = {}) {
       count: async () => {
         if (!available) return 0;
         if (selector.startsWith("iframe")) return state.challenge ? 1 : 0;
+        if (selector.includes('autocomplete="one-time-code"')) return state.verificationInput ? 1 : 0;
         if (selector.startsWith("input")) return state.loginInput ? 1 : 0;
         if (selector === '[data-testid="SideNav_AccountSwitcher_Button"]') return state.hasSwitcher ? 1 : 0;
         return 1;
@@ -78,6 +79,10 @@ function fixture(options = {}) {
     },
     locator: (selector) => makeLocator(selector, !(state.semanticOnly && selector.includes("data-testid"))),
     getByRole: (role, settings) => {
+      if (["dialog", "alert"].includes(role)) {
+        const messageScope = { or: () => messageScope, getByText: (pattern) => ({ count: async () => pattern.test(state.dialogText || "") ? 1 : 0 }) };
+        return messageScope;
+      }
       const labels = state.french
         ? { link: "Profil", textbox: "Texte du post", button: "Publier" }
         : { link: "Profile", textbox: "Post text", button: "Post" };
@@ -86,6 +91,7 @@ function fixture(options = {}) {
       assert.equal(settings.name.test(`Other ${labels[role]} content`), false);
       return makeLocator(`role:${role}`, true);
     },
+    getByText: (pattern) => ({ count: async () => pattern.test(state.barrierText || "") ? 1 : 0 }),
     waitForResponse: (predicate, settings) => {
       assert.equal(settings.timeout < 60_000, true);
       assert.equal(predicate(response), true);
@@ -105,7 +111,7 @@ function fixture(options = {}) {
   const browser = {
     newContext: async (settings) => {
       state.contexts++;
-      assert.deepEqual(plain(settings), { storageState: "/test/session.json" });
+      assert.deepEqual(plain(settings), { storageState: options.recovery ? options.recovery.readSessionSnapshot((options.env ?? env).X_BROWSER_SESSION_PATH).state : { cookies: [], origins: [] } });
       if (state.contextError) throw state.contextError;
       return context;
     },
@@ -115,6 +121,12 @@ function fixture(options = {}) {
   const client = loadTypeScript("app/api/post_tweets/browserClient.ts", {
     env: options.env ?? env,
     mocks: {
+      "./browserSessionRecovery": options.recovery ?? {
+        SessionRecoveryError: class extends Error {},
+        readSessionSnapshot: () => ({ filename: "/test/session.json", fingerprint: "fake-hash", state: { cookies: [], origins: [] } }),
+        claimSessionRecovery: () => { throw new Error("Unexpected session recovery"); },
+        saveRecoveredSession: () => { throw new Error("Unexpected session write"); },
+      },
       "node:fs": {
         constants: { R_OK: 4, X_OK: 1 },
         statSync: (path) => {
@@ -230,6 +242,12 @@ test("semantic profile role still requires the exact expected account href", asy
   assert.equal(state.clicks, 0);
 });
 
+test("timeline quotes of login or verification messages never trigger an authentication barrier", async () => {
+  const { client } = fixture({ state: { barrierText: "Nous avons temporairement limité votre connexion ; code de vérification" } });
+  const publisher = await client.createBrowserPublisher();
+  await publisher.close();
+});
+
 test("a clicked button is insufficient without a CreateTweet rest_id", async () => {
   for (const body of [{ data: {} }, { data: { create_tweet: { tweet_results: { result: { rest_id: "not-an-id" } } } } }]) {
     const { client, state } = fixture({ state: { body } });
@@ -328,7 +346,7 @@ test("initialization deadline closes a browser that finishes launching after tim
     },
   });
   const resultPromise = client.createBrowserPublisher().catch(client.normalizeBrowserFailure);
-  const deadline = [...timers.values()].find((timer) => timer.milliseconds === 20_000);
+  const deadline = [...timers.values()].find((timer) => timer.milliseconds > 45_000 && timer.milliseconds <= 50_000);
   assert.ok(deadline);
   deadline.callback();
   const result = await resultPromise;
