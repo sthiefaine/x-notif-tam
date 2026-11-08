@@ -187,8 +187,8 @@ test("coverage is source availability, never an invented network service percent
   const h = storageHarness();
   const response = plain(await h.storage.getHeadwayStatistics(new Date(NOW)));
   assert.equal(response.observed.status, "collecting"); assert.equal(response.observed.coverage.healthyMinutes, 1);
-  assert.equal(response.observed.coverage.expectedMinutes, 27 * 840 + 360); assert.equal(response.observed.coverage.observedStopDirections, 0);
-  assert.equal(response.selection.dateCount, 28); assert.equal(response.observed.coverage.coveredDays, 1);
+  assert.equal(response.observed.coverage.expectedMinutes, 360); assert.equal(response.observed.coverage.observedStopDirections, 0);
+  assert.equal(response.selection.dateCount, 1); assert.equal(response.observed.coverage.coveredDays, 1);
   assert.equal(response.observed.windowEnd, "2026-11-08T12:00:00.000Z");
   assert.equal(response.window.end, "2026-11-08T20:00:00.000Z"); assert.equal(response.observed.partial, true);
 });

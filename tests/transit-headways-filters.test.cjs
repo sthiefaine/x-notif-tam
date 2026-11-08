@@ -19,8 +19,10 @@ function passage(key, date, clock, extra = {}) {
 const distribution = (histogram) => ({ byRoute: [{ routeId: "1", name: "Tram 1", shortName: "1", mode: "tram", color: "#123456", textColor: "#fff",
   histogram, passageCount: histogram.reduce((sum, [, count]) => sum + count, 0) + 1, stopDirectionCount: 1, censoredIntervalCount: 0 }] });
 
-test("default selection is exactly 28 Paris dates with all ISO weekdays, inclusive endpoints", () => {
-  const value = plain(select());
+test("explicit both selection covers 28 Paris dates while the bare endpoint preserves today's legacy window", () => {
+  const legacy = plain(select());
+  assert.equal(legacy.from, "2026-11-08"); assert.equal(legacy.to, "2026-11-08"); assert.equal(legacy.dateCount, 1);
+  const value = plain(select("target=both"));
   assert.equal(value.from, "2026-10-12"); assert.equal(value.to, "2026-11-08"); assert.equal(value.dateCount, 28);
   assert.deepEqual(value.weekdays, [1, 2, 3, 4, 5, 6, 7]); assert.equal(value.holidays, "include"); assert.equal(value.schoolHolidays, "include");
   assert.equal(parse("", new Date("2026-11-08T23:30:00Z")).to, "2026-11-09");

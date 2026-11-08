@@ -13,7 +13,8 @@ export function normalizeHeadwayFilters(params = new URL("http://localhost").sea
   if (target !== "planned" && target !== "observed" && target !== "both") throw new HeadwayFilterError("Source de statistiques invalide.");
   const today = parisDateKey(now), rawFrom = params.get("from");
   const defaultTo = target === "planned" ? addDateDays(rawFrom && dateValid(rawFrom) ? rawFrom : today, 6) : today;
-  const to = params.get("to") ?? defaultTo, from = rawFrom ?? (dateValid(to) ? addDateDays(to, target === "planned" ? -6 : -27) : "");
+  // Existing open pages request the bare endpoint and label it as today's data.
+  const to = params.get("to") ?? defaultTo, from = rawFrom ?? (params.size === 0 ? today : dateValid(to) ? addDateDays(to, target === "planned" ? -6 : -27) : "");
   if (!dateValid(from) || !dateValid(to) || from > to || to > addDateDays(today, 366) || from < "2000-01-01") throw new HeadwayFilterError("Dates invalides : utilisez le format AAAA-MM-JJ, au plus 366 jours dans le futur.");
   if ((Date.parse(`${to}T12:00:00Z`) - Date.parse(`${from}T12:00:00Z`)) / 86400_000 + 1 > 366) throw new HeadwayFilterError("La plage ne peut pas dépasser 366 jours.");
   const raw = params.get("weekdays");
