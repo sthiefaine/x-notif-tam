@@ -25,6 +25,7 @@ function loadPosting(prisma, postToX, configured = true, mode = "api") {
   return loadTypeScript("app/api/post_tweets/postTweet.ts", {
     mocks: {
       "@/lib/prisma": { prisma },
+      "@/lib/transit/publication-ledger": loadTypeScript("lib/transit/publication-ledger.ts"),
       "./publisher": {
         getPublisherConfiguration: () => configuration(configured, mode),
         createTextPublisher: () => ({

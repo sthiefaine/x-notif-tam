@@ -44,3 +44,6 @@ yarn-error.log*
 next-env.d.ts
 .vscode
 pnpm-lock.yaml
+
+# Generated from the installed MapLibre package
+/public/vendor/maplibre/

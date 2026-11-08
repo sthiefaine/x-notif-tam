@@ -1,24 +1,16 @@
+# À reporter dans les tâches programmées Coolify de l’application.
+# Les flux de la carte sont collectés par le serveur toutes les 30 secondes.
 cronjobs:
-  - name: post_tweets_3_18
-    schedule: "*/1 3-18 * * *"
-    command: "curl -X POST \"$BASE_URL/api/post_tweets\" -H \"Authorization: Bearer $CRON_SECRET\""
-
-  - name: post_tweets_19_23
-    schedule: "*/2 19-23 * * *"
-    command: "curl -X POST \"$BASE_URL/api/post_tweets\" -H \"Authorization: Bearer $CRON_SECRET\""
-
-  - name: post_tweets_0_2
-    schedule: "*/20 0-2 * * *"
-    command: "curl -X POST \"$BASE_URL/api/post_tweets\" -H \"Authorization: Bearer $CRON_SECRET\""
-
-  - name: get_alerts_4_19
-    schedule: "*/1 4-19 * * *"
-    command: "curl -X POST \"$BASE_URL/api/get_alerts\" -H \"Authorization: Bearer $CRON_SECRET\""
-
-  - name: get_alerts_20_23
-    schedule: "*/2 20-23 * * *"
-    command: "curl -X POST \"$BASE_URL/api/get_alerts\" -H \"Authorization: Bearer $CRON_SECRET\""
-
-  - name: get_alerts_0_3
-    schedule: "*/10 0-3 * * *"
-    command: "curl -X POST \"$BASE_URL/api/get_alerts\" -H \"Authorization: Bearer $CRON_SECRET\""
+  - name: get_alerts_2
+    schedule: "*/2 * * * *"
+    command: 'curl --fail --silent --show-error --max-time 60 -X POST http://127.0.0.1:3000/api/get_alerts -H "Authorization: Bearer $CRON_SECRET"'
+  - name: post_tweets
+    schedule: "*/10 * * * *"
+    command: 'curl --fail --silent --show-error --max-time 180 -X POST http://127.0.0.1:3000/api/post_tweets -H "Authorization: Bearer $CRON_SECRET"'
+  - name: transit_network_daily
+    schedule: "15 3 * * *"
+    command: "npm run transit:sync"
+  - name: transit_stats_daily
+    schedule: "45 3 * * *"
+    command: 'curl --fail --silent --show-error --max-time 65 -X POST http://127.0.0.1:3000/api/transit/maintenance -H "Authorization: Bearer $CRON_SECRET"'
+# TRANSIT_PURGE_ENABLED=true active aussi la rétention horaire, après agrégation.

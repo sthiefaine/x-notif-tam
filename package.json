@@ -10,14 +10,22 @@
     "test": "node --test tests/*.test.cjs",
     "x:login": "node --env-file-if-exists=.env scripts/x-browser-login.cjs",
     "x:save-session": "node --env-file-if-exists=.env scripts/x-save-session.cjs",
+    "transit:sync": "node scripts/sync-transit-network.cjs",
+    "transit:migrate": "node scripts/migrate-transit.cjs",
     "prisma:generate": "prisma generate",
-    "vercel-build": "npx prisma generate && next build"
+    "vercel-build": "npx prisma generate && next build",
+    "predev": "node scripts/copy-maplibre-worker.cjs",
+    "prebuild": "node scripts/copy-maplibre-worker.cjs"
   },
   "dependencies": {
     "@prisma/client": "^6.15.0",
+    "csv-parse": "^7.0.3",
+    "fflate": "^0.8.3",
     "lru-cache": "^11.0.2",
+    "maplibre-gl": "^6.17.0",
     "next": "15.5.29",
     "playwright-core": "1.65.0",
+    "pmtiles": "^4.5.0",
     "prisma": "^6.15.0",
     "protobufjs": "^7.5.3",
     "react": "^19.0.1",

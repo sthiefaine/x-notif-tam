@@ -30,11 +30,11 @@ COPY . .
 # Build the application
 RUN npm run build
 
-RUN mkdir -p /app/.x-browser && chown -R node:node /app
+RUN mkdir -p /app/.x-browser /app/.transit-data && chown -R node:node /app
 USER node
 
 # Expose port
 EXPOSE 3000
 
 # Start the application
-CMD ["npm", "start"]
+CMD ["sh", "-c", "node scripts/migrate-transit.cjs && npm start"]

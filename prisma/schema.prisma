@@ -111,6 +111,7 @@ model Stop {
   stopTimes      StopTime[]
 
   hourlyStopMetrics HourlyStopMetric[]
+
   @@map("stops")
 }
 
@@ -226,39 +227,37 @@ model HourlyMetric {
 }
 
 model HourlyStopMetric {
-  id              Int      @id @default(autoincrement())
-  date            DateTime @db.Date
-  hour            Int      
-  stopId          String   @map("stop_id")
-  avgDelay        Float    @default(0) @map("avg_delay")
-  maxDelay        Float    @default(0) @map("max_delay")
-  minDelay        Float    @default(0) @map("min_delay")
-  observations    Int      @default(0)
-  delayUnder30s   Float    @default(0) @map("delay_under_30s")
-  delay30to60s    Float    @default(0) @map("delay_30_to_60s")
-  delay60to120s   Float    @default(0) @map("delay_60_to_120s")
-  delay120to300s  Float    @default(0) @map("delay_120_to_300s")
-  delayOver300s   Float    @default(0) @map("delay_over_300s")
-  earlyRate30     Float    @default(0) @map("early_rate_30")
-  earlyRate60     Float    @default(0) @map("early_rate_60")
-  earlyRate120    Float    @default(0) @map("early_rate_120")
-  onTimeRate30    Float    @default(0) @map("on_time_rate_30")
-  onTimeRate60    Float    @default(0) @map("on_time_rate_60")
-  onTimeRate120   Float    @default(0) @map("on_time_rate_120")
-  lateRate30      Float    @default(0) @map("late_rate_30")
-  lateRate60      Float    @default(0) @map("late_rate_60")
-  lateRate120     Float    @default(0) @map("late_rate_120")
-  
+  id             Int      @id @default(autoincrement())
+  date           DateTime @db.Date
+  hour           Int
+  stopId         String   @map("stop_id")
+  avgDelay       Float    @default(0) @map("avg_delay")
+  maxDelay       Float    @default(0) @map("max_delay")
+  minDelay       Float    @default(0) @map("min_delay")
+  observations   Int      @default(0)
+  delayUnder30s  Float    @default(0) @map("delay_under_30s")
+  delay30to60s   Float    @default(0) @map("delay_30_to_60s")
+  delay60to120s  Float    @default(0) @map("delay_60_to_120s")
+  delay120to300s Float    @default(0) @map("delay_120_to_300s")
+  delayOver300s  Float    @default(0) @map("delay_over_300s")
+  earlyRate30    Float    @default(0) @map("early_rate_30")
+  earlyRate60    Float    @default(0) @map("early_rate_60")
+  earlyRate120   Float    @default(0) @map("early_rate_120")
+  onTimeRate30   Float    @default(0) @map("on_time_rate_30")
+  onTimeRate60   Float    @default(0) @map("on_time_rate_60")
+  onTimeRate120  Float    @default(0) @map("on_time_rate_120")
+  lateRate30     Float    @default(0) @map("late_rate_30")
+  lateRate60     Float    @default(0) @map("late_rate_60")
+  lateRate120    Float    @default(0) @map("late_rate_120")
+
   // Relation avec le modèle Stop
-  stop            Stop     @relation(fields: [stopId], references: [id])
+  stop Stop @relation(fields: [stopId], references: [id])
 
   // Contrainte d'unicité
   @@unique([date, hour, stopId], name: "hourly_stop_metrics_unique_date_hour_stop")
-  
   // Index pour des requêtes efficaces
   @@index([date, hour], name: "hourly_stop_metrics_date_hour_idx")
   @@index([stopId], name: "hourly_stop_metrics_stop_id_idx")
-  
   // Nom de la table dans la base de données
   @@map("hourly_stop_metrics")
 }
@@ -347,5 +346,86 @@ model XSession {
   cookie    Json
   expiresAt DateTime
   createdAt DateTime @default(now())
+
   @@map("x_sessions")
+}
+
+// Compact state is deliberately independent of the legacy Alert foreign keys.
+// Purging an alert must never erase the record that X accepted its publication.
+model PublicationLedger {
+  alertId    String   @id @map("alert_id")
+  status     String
+  tweetId    String?  @map("tweet_id")
+  recordedAt DateTime @default(now()) @map("recorded_at") @db.Timestamptz(3)
+
+  @@map("publication_ledger")
+}
+
+model TransitIncident {
+  id              String    @id
+  sourceEntityId  String    @map("source_entity_id")
+  routeIds        String[]  @map("route_ids")
+  stopIds         String[]  @map("stop_ids")
+  category        String
+  cause           String
+  effect          String
+  header          String
+  description     String
+  periods         Json
+  contentHash     String    @map("content_hash")
+  firstSeenAt     DateTime  @map("first_seen_at") @db.Timestamptz(3)
+  lastSeenAt      DateTime  @map("last_seen_at") @db.Timestamptz(3)
+  startsAt        DateTime? @map("starts_at") @db.Timestamptz(3)
+  endsAt          DateTime? @map("ends_at") @db.Timestamptz(3)
+  closedAt        DateTime? @map("closed_at") @db.Timestamptz(3)
+  contentPurgedAt DateTime? @map("content_purged_at") @db.Timestamptz(3)
+  legacy          Boolean   @default(false)
+
+  @@index([sourceEntityId])
+  @@index([closedAt])
+  @@index([lastSeenAt])
+  @@map("transit_incidents")
+}
+
+model TransitGpsSample {
+  id         BigInt   @id @default(autoincrement())
+  vehicleKey String   @map("vehicle_key")
+  routeId    String   @map("route_id")
+  tripId     String?  @map("trip_id")
+  stopId     String?  @map("stop_id")
+  measuredAt DateTime @map("measured_at") @db.Timestamptz(3)
+  capturedAt DateTime @default(now()) @map("captured_at") @db.Timestamptz(3)
+  lat        Float
+  lon        Float
+  bearing    Float?
+
+  @@unique([vehicleKey, measuredAt])
+  @@index([measuredAt])
+  @@index([routeId, measuredAt])
+  @@map("transit_gps_samples")
+}
+
+model TransitCoverageMinute {
+  minute           DateTime @id @db.Timestamptz(3)
+  vehiclesOk       Boolean  @map("vehicles_ok")
+  updatesOk        Boolean  @map("updates_ok")
+  alertsOk         Boolean  @map("alerts_ok")
+  receivedVehicles Int      @map("received_vehicles")
+  freshVehicles    Int      @map("fresh_vehicles")
+  matchedVehicles  Int      @map("matched_vehicles")
+
+  @@map("transit_coverage_minutes")
+}
+
+model TransitWeeklyStat {
+  weekStart        DateTime @id @map("week_start") @db.Date
+  incidentCount    Int      @map("incident_count")
+  announcedMinutes Float    @map("announced_minutes")
+  byRoute          Json     @map("by_route")
+  coverage         Json
+  provisional      Boolean
+  computedAt       DateTime @default(now()) @map("computed_at") @db.Timestamptz(3)
+  algorithmVersion Int      @default(1) @map("algorithm_version")
+
+  @@map("transit_weekly_stats")
 }

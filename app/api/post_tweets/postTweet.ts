@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { Alert } from "@prisma/client";
 import type { XApiError } from "./xApiClient";
 import { getPublisherConfiguration, createTextPublisher } from "./publisher";
+import { restorePublicationStates, preparePublicationGroup, confirmPublicationGroup, releaseRejectedGroup } from "@/lib/transit/publication-ledger";
 
 const wait = (ms: number): Promise<void> =>
   new Promise((resolve) => setTimeout(resolve, ms));
@@ -238,7 +239,7 @@ export const postToTwitter = async (): Promise<PostingResult> => {
       `;
       if (!locks[0]?.locked) return [];
 
-      const alerts = await tx.alert.findMany({
+      const candidates = await tx.alert.findMany({
         where: {
           isPosted: false,
           isProcessing: false,
@@ -247,6 +248,7 @@ export const postToTwitter = async (): Promise<PostingResult> => {
         orderBy: { timeStart: "asc" },
         take: 20,
       });
+      const alerts = await restorePublicationStates(tx, candidates);
       if (alerts.length > 0) {
         await tx.alert.updateMany({
           where: { id: { in: alerts.map((alert) => alert.id) } },
@@ -288,13 +290,7 @@ export const postToTwitter = async (): Promise<PostingResult> => {
         const tweetContent = formatTweetFromAlertGroup(alertGroup);
         // Persister le marqueur AVANT l'envoi : un crash ou une panne DB après
         // acceptation par X ne doit jamais libérer automatiquement ce groupe.
-        const prepared = await prisma.alert.updateMany({
-          where: {
-            id: { in: groupAlertIds }, isPosted: false, isProcessing: true,
-            inProcessSince: claimedAt,
-          },
-          data: { inProcessSince: null },
-        });
+        const prepared = await preparePublicationGroup(prisma, groupAlertIds, claimedAt);
         groupAlertIds.forEach((id) => heldIds.add(id));
         if (prepared.count !== groupAlertIds.length) {
           throw new Error("Le lot a changé avant la publication");
@@ -302,10 +298,7 @@ export const postToTwitter = async (): Promise<PostingResult> => {
         const result = await publisher.postText(tweetContent);
 
         if (result.success) {
-          await prisma.alert.updateMany({
-            where: { id: { in: groupAlertIds } },
-            data: { isPosted: true, isProcessing: false, inProcessSince: null },
-          });
+          await confirmPublicationGroup(prisma, groupAlertIds, result.id);
           groupAlertIds.forEach((id) => heldIds.delete(id));
           processed += alertGroup.length;
           messages.push(
@@ -317,10 +310,7 @@ export const postToTwitter = async (): Promise<PostingResult> => {
           // Sans confirmation après envoi, conserver l'alerte pour contrôle
           // manuel. Un réessai automatique pourrait publier un doublon.
           if (!result.error.uncertain) {
-            await prisma.alert.updateMany({
-              where: { id: { in: groupAlertIds }, isPosted: false },
-              data: { isProcessing: false, inProcessSince: null },
-            });
+            await releaseRejectedGroup(prisma, groupAlertIds);
             groupAlertIds.forEach((id) => heldIds.delete(id));
           }
           failed += alertGroup.length;

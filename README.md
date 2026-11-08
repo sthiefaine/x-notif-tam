@@ -1,6 +1,47 @@
-# Système d'alertes de transport en commun de Montpellier
+# TaM en direct — carte des transports de Montpellier
 
-Ce projet est un système complet de gestion et de diffusion d'alertes de transport en commun, comprenant une API pour accéder aux alertes et un système automatisé de publication sur Twitter/X. Il est conçu pour informer les usagers des transports publics des perturbations, travaux, et autres événements affectant le réseau de Montpellier.
+L'accueil de [x-notif-tam.clairdev.com](https://x-notif-tam.clairdev.com/) affiche les lignes, arrêts, véhicules et perturbations du réseau TaM sur une carte MapLibre. La documentation publique est accessible à [/doc/api](https://x-notif-tam.clairdev.com/doc/api), et les bilans à [/statistiques](https://x-notif-tam.clairdev.com/statistiques). Ce service indépendant utilise les données officielles avec leur provenance et signale les informations absentes ou anciennes.
+
+## Carte et données temps réel
+
+- Référentiel GTFS COMMON et tracés GeoJSON opérationnels : compilation hors des requêtes web, deux versions conservées, aucune insertion d'un million de `stop_times` dans PostgreSQL.
+- Positions, prévisions et alertes : un collecteur partagé par processus, toutes les trente secondes, état en mémoire borné. Une date de mesure de plus de 90 secondes est périmée ; une position disparaît du direct après 180 secondes.
+- Couleur officielle des lignes conservée ; hachures jaunes seulement sur une portion concernée suffisamment localisée, coupure rouge pour une interruption officielle, halo lavande pour un arrêt prolongé estimé. L'itinéraire réel d'une déviation n'est pas inventé.
+- Le signal lavande utilise des mesures fraîches, un arrêt et une course connus, les horaires et plusieurs observations ; terminus, pauses prévues et pertes GPS ne sont pas qualifiés d'anormaux. La cause reste inconnue.
+- Fond clair OpenFreeMap configurable, attribution visible, liste équivalente lorsque WebGL est indisponible, favoris locaux et géolocalisation volontaire.
+
+## Conservation et bilans
+
+Les échantillons GPS utiles au diagnostic sont enregistrés au maximum une fois par minute, conservés **24 heures au maximum** avec un plafond de **200 000 lignes**, et désactivables. Ces limites sont configurables et bornées ; aucune trajectoire exhaustive n'est conservée indéfiniment.
+
+Les détails d'incidents clos sont conservés sept jours puis nettoyés après validation des agrégats. Les incidents actifs et publications incertaines restent protégés. Les faits compacts et bilans hebdomadaires couvrent 52 semaines, selon les semaines locales Europe/Paris, y compris les changements d'heure. Les bilans décrivent des alertes et des durées annoncées, avec couverture des observations ; ils ne sont pas une mesure de l'interruption réelle du réseau.
+
+Un registre indépendant conserve les empreintes des publications X confirmées ou incertaines. La migration et le nettoyage reprennent les anciens états avant toute suppression. Une alerte recréée après purge ne peut donc pas déclencher un nouvel envoi déjà enregistré.
+
+```dotenv
+TRANSIT_LIVE_ENABLED=true
+TRANSIT_STORAGE_ENABLED=true
+TRANSIT_PURGE_ENABLED=false
+TRANSIT_GPS_ENABLED=true
+TRANSIT_GPS_RETENTION_HOURS=24
+TRANSIT_GPS_MAX_ROWS=200000
+TRANSIT_GPS_SAMPLE_SECONDS=60
+TRANSIT_STATS_WEEKS=52
+TRANSIT_DATA_DIR=/app/.transit-data
+```
+
+Le Dockerfile exécute une migration SQL **additive** avant de démarrer Next.js, sans `db push`, suppression de table ou réinitialisation du schéma existant. En local, exécuter `npm run transit:migrate` avec une base de développement explicite. Pour prévisualiser la carte sans enregistrer de données, utiliser `TRANSIT_STORAGE_ENABLED=false X_POSTING_MODE=disabled npm run dev`.
+
+Dans Coolify, les flags du collecteur et du stockage sont disponibles au runtime uniquement, afin d'éviter toute collecte pendant la construction. Monter un volume persistant à `/app/.transit-data` et conserver séparément le volume privé de session X. Le référentiel embarqué sert de repli si le volume est vide ou si une actualisation échoue.
+
+Commandes et routes de maintenance :
+
+- `npm run transit:sync` : télécharge les sources publiques, compile et valide le nouveau référentiel, puis active son manifeste atomiquement. À planifier chaque nuit dans le conteneur.
+- `POST /api/transit/maintenance?dryRun=true` : compte les anciens contenus éligibles sans les modifier.
+- `POST /api/transit/maintenance?purge=true` : reprend le registre de publication, valide les bilans, puis nettoie les lots éligibles. Authentification `Authorization: Bearer <CRON_SECRET>` obligatoire.
+- `TRANSIT_PURGE_ENABLED=true` autorise aussi le nettoyage périodique depuis le collecteur ; un échec d'agrégation conserve les données. Les GPS sont toujours soumis à leurs propres plafonds.
+
+Surveiller taille des tables/index, autovacuum, WAL et sauvegardes : `DELETE` permet la réutilisation de l'espace sans réduire immédiatement les fichiers. Aucune tâche `VACUUM FULL` automatique n'est installée.
 
 ## Documentation
 
@@ -11,10 +52,11 @@ Pour plus de détails sur chaque composant du système, consultez les liens ci-d
 
 ## Architecture du projet
 
-Le système se compose de deux parties principales :
+Le système se compose de trois parties principales :
 
 1. **API d'alertes** - Une API REST pour accéder aux informations d'alertes de transport
 2. **Système d'automatisation Twitter** - Un service qui publie automatiquement les alertes sur Twitter/X
+3. **Carte voyageurs** - Un référentiel statique compilé, un cache temps réel partagé et des bilans compacts
 
 ### Technologie utilisée
 
@@ -48,7 +90,7 @@ Le système se compose de deux parties principales :
 
 ### Prérequis
 
-- Node.js 20.19+ en local ; image Docker Node.js 22 avec Chromium
+- Node.js 22 recommandé ; image Docker Node.js 22 avec Chromium
 - PostgreSQL
 - Compte X et session navigateur ; application développeur X uniquement pour le mode API
 - Hébergement Docker/Coolify ou Vercel avec des tâches planifiées

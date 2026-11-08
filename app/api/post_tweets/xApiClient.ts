@@ -114,14 +114,21 @@ export const postToX = async (
   | { success: true; message: string; id: string }
   | { success: false; message: string; error: XApiError }
 > => {
+  let invocationStarted = false;
   try {
-    const res = await getClient().v2.tweet(text);
-    if (!res.data?.id) {
+    const writeClient = getClient().v2;
+    const publish = writeClient.tweet.bind(writeClient);
+    invocationStarted = true;
+    const res = await publish(text);
+    if (typeof res.data?.id !== "string" || !res.data.id.trim()) {
       throw new Error("X n'a pas renvoyé d'identifiant de publication.");
     }
     return { success: true, message: "Tweet publié", id: res.data.id };
   } catch (error) {
     const details = getXApiError(error);
+    // Sans réponse exploitable, X peut avoir accepté le post avant la panne.
+    // Seul un refus HTTP 4xx explicite permet de libérer le reçu pré-envoi.
+    details.uncertain = invocationStarted && !(details.status !== undefined && details.status >= 400 && details.status < 500);
     console.error("Erreur API X lors de la publication:", details);
     return { success: false, message: details.detail, error: details };
   }

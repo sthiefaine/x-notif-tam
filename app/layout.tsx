@@ -5,22 +5,21 @@ import "./globals.css";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata = {
-  title: "API d'alertes de transport Montpellier - Documentation",
+  metadataBase: new URL("https://x-notif-tam.clairdev.com"),
+  title: { default: "TaM en direct — Transports de Montpellier", template: "%s · TaM en direct" },
   description:
-    "Documentation complète de l'API d'alertes pour accéder aux perturbations du réseau de transport en commun de Montpellier",
-  keywords: "API, transport, Montpellier, alertes, documentation, tramway, bus",
+    "Lignes, arrêts, véhicules et perturbations des transports de Montpellier sur une carte en temps réel. Un service indépendant pour vos déplacements.",
+  keywords: "transport, Montpellier, TaM, carte, tramway, bus, arrêts, temps réel, perturbations",
   openGraph: {
-    title: "API d'alertes de transport Montpellier",
+    title: "TaM en direct — Montpellier",
     description:
-      "Accédez aux données d'alertes du réseau de transport en commun de Montpellier",
-    url: "https://x.notif.tam.vercel.app/",
-    siteName: "Alertes Transport Montpellier",
+      "Votre ligne, ses arrêts et les perturbations en direct sur la carte.",
+    url: "https://x-notif-tam.clairdev.com/",
+    siteName: "TaM en direct",
     images: [
       {
-        url: "/api-doc-preview.png",
-        width: 1200,
-        height: 630,
-        alt: "Aperçu de la documentation API",
+        url: "/tram2-tam.png",
+        alt: "Tramway de Montpellier",
       },
     ],
     locale: "fr-FR",
@@ -28,15 +27,13 @@ export const metadata = {
   },
   twitter: {
     card: "summary_large_image",
-    title: "API d'alertes de transport Montpellier",
+    title: "TaM en direct — Montpellier",
     description:
-      "Accédez aux données d'alertes du réseau de transport en commun de Montpellier",
+      "Votre ligne, ses arrêts et les perturbations en direct sur la carte.",
     images: [
       {
-        url: "/api-doc-preview.png",
-        width: 1200,
-        height: 630,
-        alt: "Aperçu de la documentation API",
+        url: "/tram2-tam.png",
+        alt: "Tramway de Montpellier",
       },
     ],
   },

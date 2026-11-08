@@ -1,12 +1,12 @@
 import type { MetadataRoute } from "next";
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: "Les alertes de transport de Montpellier sur X",
-    short_name: "X transport alerts Montpellier",
-    description: "État trafic transport de Montpellier sur X",
+    name: "TaM en direct — Transports de Montpellier",
+    short_name: "TaM en direct",
+    description: "Lignes, arrêts, véhicules et perturbations du réseau TaM autour de Montpellier",
     start_url: "/",
     display: "standalone",
     background_color: "#FFF",
-    theme_color: "#FFF",
+    theme_color: "#3356ad",
   };
 }
