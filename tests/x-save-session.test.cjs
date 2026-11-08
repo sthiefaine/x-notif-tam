@@ -85,6 +85,7 @@ test("saves only X state from the already connected fixed project profile withou
     const result = await runSaveSession(options);
     assert.deepEqual(calls.launch, [[profile, {
       executablePath: "/test/chrome", headless: false, timeout: 30_000,
+      ignoreDefaultArgs: ["--use-mock-keychain", "--password-store=basic"],
     }]]);
     assert.deepEqual(calls.goto, [["https://x.com/home", {
       waitUntil: "domcontentloaded", timeout: 30_000,
@@ -105,6 +106,42 @@ test("saves an existing session using the semantic Profile link without legacy t
     const { options, calls } = browserFixture(root, { semanticOnly: true });
     await runSaveSession(options);
     assert.equal(calls.saved.length, 1);
+    assert.equal(calls.closed, 1);
+  });
+});
+
+test("interactive capture waits for manual confirmation and saves in the same browser context", async () => {
+  await projectFixture(async (root) => {
+    const { options, calls } = browserFixture(root);
+    let confirm;
+    options.interactive = true;
+    options.prompt = ({ message }) => {
+      assert.match(message, /@testbot/);
+      return new Promise((resolve) => { confirm = resolve; });
+    };
+    const running = runSaveSession(options);
+    while (!confirm) await new Promise(setImmediate);
+    assert.equal(calls.launch.length, 1);
+    assert.equal(calls.snapshots, 0);
+    assert.equal(calls.saved.length, 0);
+    assert.equal(calls.closed, 0);
+    confirm();
+    await running;
+    assert.equal(calls.launch.length, 1);
+    assert.equal(calls.goto.length, 1);
+    assert.equal(calls.saved.length, 1);
+    assert.equal(calls.closed, 1);
+  });
+});
+
+test("canceling interactive capture closes the context without exporting a session", async () => {
+  await projectFixture(async (root) => {
+    const { options, calls } = browserFixture(root);
+    options.interactive = true;
+    options.prompt = async () => { throw new LoginError("Annulé"); };
+    await assert.rejects(runSaveSession(options), /Annulé/);
+    assert.equal(calls.snapshots, 0);
+    assert.equal(calls.saved.length, 0);
     assert.equal(calls.closed, 1);
   });
 });

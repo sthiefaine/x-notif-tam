@@ -9,6 +9,7 @@ const {
   verifyAccount,
   scopeSessionToX,
   saveSessionFile,
+  waitForEnter,
 } = require("./x-browser-login.cjs");
 
 async function requireExistingProfile(projectDirectory) {
@@ -54,6 +55,8 @@ async function runSaveSession({
   saveSession = saveSessionFile,
   output = (message) => console.log(message),
   closeTimeoutMs = 10_000,
+  interactive = false,
+  prompt = waitForEnter,
 } = {}) {
   const expectedHandle = normalizeHandle(env.X_ACCOUNT_HANDLE?.trim() || env.USER_HANDLE);
   const { root, profile } = await requireExistingProfile(projectDirectory);
@@ -73,10 +76,15 @@ async function runSaveSession({
     executablePath,
     headless: false,
     timeout: 30_000,
+    ignoreDefaultArgs: ["--use-mock-keychain", "--password-store=basic"],
   });
   try {
     const page = context.pages()[0] || await context.newPage();
     await page.goto("https://x.com/home", { waitUntil: "domcontentloaded", timeout: 30_000 });
+    if (interactive) {
+      output("Cette fenêtre restera ouverte jusqu'à l'enregistrement : aucune fermeture ni réouverture après votre connexion.");
+      await prompt({ message: `Connectez-vous avec le nom d'utilisateur @${expectedHandle} dans cette fenêtre, fermez les panneaux facultatifs, puis appuyez sur Entrée ici. ` });
+    }
     await verifyAccount(page, expectedHandle);
     const state = scopeSessionToX(await context.storageState());
     if (!state.cookies.some((cookie) => cookie.name === "auth_token"
@@ -84,7 +92,7 @@ async function runSaveSession({
       throw new LoginError("Le profil dédié n'a pas de session X complète. Aucune session enregistrée.");
     }
     await saveSession(filename, state);
-    output("Compte vérifié. Session X enregistrée depuis le profil dédié, sans nouvelle connexion.");
+    output("Compte vérifié. Session X enregistrée depuis le profil dédié.");
     return { filename, handle: expectedHandle };
   } finally {
     await closeContext(context, closeTimeoutMs);
@@ -92,7 +100,7 @@ async function runSaveSession({
 }
 
 if (require.main === module) {
-  runSaveSession().catch((error) => {
+  runSaveSession({ interactive: process.argv.includes("--interactive") }).catch((error) => {
     console.error(error instanceof LoginError
       ? error.message
       : "Session non enregistrée. Vérifiez Chrome et le profil dédié, puis recommencez.");

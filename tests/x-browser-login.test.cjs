@@ -100,6 +100,7 @@ test("launches ordinary Chrome with only the dedicated profile, first-run flag a
   assert.deepEqual(calls.signals, ["SIGTERM"]);
   assert.deepEqual(calls.contexts, [["/test-project/.x-browser/login-profile", {
     headless: false, executablePath: "/test/chrome", timeout: 30_000,
+    ignoreDefaultArgs: ["--use-mock-keychain", "--password-store=basic"],
   }]]);
   assert.deepEqual(calls.events, ["spawn", "confirm", "exit", "unlock", "attach"]);
   assert.deepEqual(calls.navigations, ["https://x.com/home"]);

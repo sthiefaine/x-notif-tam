@@ -187,10 +187,16 @@ async function verifyAccount(page, expectedHandle) {
     throw new LoginError("X affiche une vérification. Terminez-la manuellement avant de recommencer.");
   }
   const profile = page.locator('a[data-testid="AppTabBar_Profile_Link"]')
-    .or(page.getByRole("link", { name: /^(Profile|Profil)$/i })).first();
+    // A welcome dialog can hide the sidebar from the accessibility tree while
+    // its exact account link remains visible in the DOM. This only reads the
+    // identity; it does not dismiss or complete any security prompt.
+    .or(page.getByRole("link", { name: /^(Profile|Profil)$/i, includeHidden: true })).first();
   try {
     await profile.waitFor({ state: "visible", timeout: 15_000 });
   } catch {
+    if (isRestrictedUrl(page.url())) {
+      throw new LoginError("La connexion ou une vérification X reste en attente. Aucune session enregistrée.");
+    }
     throw new LoginError("Impossible de vérifier le compte connecté. Aucune session enregistrée.");
   }
   const href = await profile.getAttribute("href");
@@ -244,13 +250,13 @@ function scopeSessionToX(state) {
   };
 }
 
-async function waitForEnter({ signal } = {}) {
+async function waitForEnter({ signal, message = "Connectez-vous manuellement au compte attendu, puis appuyez sur Entrée ici pour enregistrer la session. " } = {}) {
   if (!process.stdin.isTTY) {
     throw new LoginError("Lancez cette commande dans un terminal interactif pour confirmer la connexion manuelle.");
   }
   const terminal = readline.createInterface({ input: process.stdin, output: process.stdout });
   try {
-    await terminal.question("Connectez-vous manuellement au compte attendu, puis appuyez sur Entrée ici pour enregistrer la session. ", { signal });
+    await terminal.question(message, { signal });
   } finally {
     terminal.close();
   }
@@ -276,7 +282,7 @@ async function runLogin({
   }
   const profileDirectory = await prepareProfile(projectDirectory);
   const manual = await launchManualChrome(executablePath, profileDirectory, { spawn });
-  output("Le Chrome dédié est ouvert. Connectez-vous et validez les éventuels codes vous-même. Entrée fermera uniquement ce Chrome pour enregistrer la session.");
+  output(`Le Chrome dédié est ouvert. Connectez-vous avec le nom d'utilisateur @${expectedHandle} et validez les éventuels codes vous-même. Entrée fermera uniquement ce Chrome pour enregistrer la session.`);
   const confirmation = new AbortController();
   try {
     await Promise.race([
@@ -304,6 +310,9 @@ async function runLogin({
     executablePath,
     headless: false,
     timeout: 30_000,
+    // Keep the OS-backed key store used by the manually opened Chrome rather
+    // than switching this existing profile to a mock/basic key store.
+    ignoreDefaultArgs: ["--use-mock-keychain", "--password-store=basic"],
   });
   try {
     // This profile belongs to the project; the user's personal profile is
@@ -340,5 +349,5 @@ if (require.main === module) {
 module.exports = {
   LoginError, normalizeHandle, findChromeExecutable, isRestrictedUrl,
   hasProfileLock, prepareLoginProfile, launchManualChrome, waitForBrowserExit, waitForProfileUnlock,
-  verifyAccount, saveSessionFile, scopeSessionToX, runLogin,
+  verifyAccount, saveSessionFile, scopeSessionToX, waitForEnter, runLogin,
 };
