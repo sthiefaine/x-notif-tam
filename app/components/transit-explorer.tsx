@@ -78,7 +78,7 @@ export default function TransitExplorer() {
       controller = new AbortController();
       const timeout = window.setTimeout(() => controller?.abort(), 25_000);
       try {
-        const response = await fetch("/api/map/network", { signal: controller.signal });
+        const response = await fetch("/api/map/network", { signal: controller.signal, cache: "no-cache" });
         if (!response.ok) throw new Error("Network unavailable");
         const data = await response.clone().json() as TransitNetwork;
         if (!Array.isArray(data.routes) || !Array.isArray(data.stops) || !data.metadata?.version) throw new Error("Invalid network");

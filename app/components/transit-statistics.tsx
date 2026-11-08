@@ -36,7 +36,7 @@ export default function TransitStatistics() {
       if (!Array.isArray(body.weeks) || !response.ok) throw new Error("Statistics unavailable");
       if (!disposed) { setData(body); setError(false); setSelected((previous) => previous || body.weeks[0]?.weekStart || ""); }
     }).catch(() => { if (!disposed) setError(true); });
-    void fetch("/api/map/network", { signal: controller.signal }).then(async (response) => { if (response.ok) { const body = await response.json() as TransitNetwork; if (!disposed && Array.isArray(body.routes)) setNetwork(body); } }).catch(() => {});
+    void fetch("/api/map/network", { signal: controller.signal, cache: "no-cache" }).then(async (response) => { if (response.ok) { const body = await response.json() as TransitNetwork; if (!disposed && Array.isArray(body.routes)) setNetwork(body); } }).catch(() => {});
     return () => { disposed = true; controller.abort(); };
   }, [retry]);
   const week = data?.weeks.find((entry) => entry.weekStart === selected) || data?.weeks[0];
