@@ -100,10 +100,14 @@ export default function TransitMap(props: Props) {
         // The ESM worker and its shared module are served verbatim. Letting a
         // bundler rewrite the worker's import.meta URL breaks it in Turbopack.
         maplibregl.setWorkerUrl("/vendor/maplibre/maplibre-gl-worker.mjs");
-        map = new maplibregl.Map({ container: container.current, style: styleUrl, center: [3.879, 43.6119], zoom: 11.4, maxZoom: 18, minZoom: 8, attributionControl: false, cooperativeGestures: true, maxPitch: 0 });
+        map = new maplibregl.Map({
+          container: container.current, style: styleUrl, center: [3.879, 43.6119], zoom: 11.4,
+          maxZoom: 18, minZoom: 8, attributionControl: false, cooperativeGestures: false, maxPitch: 0,
+          locale: { "NavigationControl.ZoomIn": "Zoomer", "NavigationControl.ZoomOut": "Dézoomer" },
+        });
         mapRef.current = map;
         if (typeof ResizeObserver !== "undefined") { resizeObserver = new ResizeObserver(() => map?.resize()); resizeObserver.observe(container.current); }
-        map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "bottom-right");
+        map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "top-right");
         map.addControl(new maplibregl.AttributionControl({ compact: true, customAttribution: 'Fond : <a href="https://openfreemap.org/" target="_blank" rel="noopener noreferrer">OpenFreeMap</a> · <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">© OpenStreetMap</a> · <a href="https://openmaptiles.org/" target="_blank" rel="noopener noreferrer">OpenMapTiles</a>' }), "bottom-right");
         map.on("style.load", () => {
           if (disposed || !map) return;

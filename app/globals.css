@@ -137,8 +137,10 @@ button svg,a svg { flex:none; }
 .transit-map-area .transit-map-canvas { position:absolute; inset:0; width:100%; height:100%; }
 .transit-map-canvas .maplibregl-ctrl-attrib { font-size:9px; }
 .transit-map-canvas .maplibregl-ctrl-bottom-right { z-index:3; }
+.transit-map-canvas .maplibregl-ctrl-top-right { top:70px; right:20px; z-index:3; }
+.transit-map-canvas .maplibregl-ctrl-top-right .maplibregl-ctrl { margin:0; }
 .transit-map-canvas .maplibregl-ctrl-group { border-radius:8px; box-shadow:0 2px 6px #233d5c12; border:1px solid #dbe3eb; }
-.transit-map-canvas .maplibregl-ctrl-group button { width:36px; height:36px; }
+.transit-map-canvas .maplibregl-ctrl-group button { width:44px; height:44px; }
 .transit-map-canvas .maplibregl-ctrl-bottom-right .maplibregl-ctrl { margin-right:19px; }
 .map-top-controls { position:absolute; top:20px; left:23px; right:20px; display:flex; justify-content:space-between; align-items:flex-start; gap:10px; pointer-events:none; }
 .map-top-controls>* { pointer-events:auto; }
@@ -245,6 +247,7 @@ button svg,a svg { flex:none; }
   .map-control-button { width:35px; height:36px; }
   .map-locate-button { right:13px; bottom:145px; width:36px; height:36px; }
   .transit-map-canvas .maplibregl-ctrl-bottom-right .maplibregl-ctrl { margin-right:13px; }
+  .transit-map-canvas .maplibregl-ctrl-top-right { top:64px; right:13px; }
   .transit-map-canvas .maplibregl-ctrl-bottom-right { bottom:40px; }
   .transit-map-canvas .maplibregl-ctrl-attrib { font-size:8px; max-width:220px; }
   .map-legend { left:13px; bottom:61px; width:auto; padding:9px 11px; }
