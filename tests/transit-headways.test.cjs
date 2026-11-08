@@ -5,6 +5,9 @@ const realtime = loadTypeScript("lib/transit/realtime.ts");
 const time = loadTypeScript("lib/transit/time.ts");
 const dwell = loadTypeScript("lib/transit/dwell.ts", { mocks: { "./realtime": realtime } });
 const core = loadTypeScript("lib/transit/headways.ts", { mocks: { "./realtime": realtime, "./time": time } });
+const calendar = loadTypeScript("lib/transit/headways-calendar.ts");
+const filters = loadTypeScript("lib/transit/headways-filters.ts", { mocks: { "./time": time, "./headways-calendar": calendar } });
+const aggregate = loadTypeScript("lib/transit/headways-aggregate.ts", { mocks: { "./time": time, "./headways": core } });
 const detector = loadTypeScript("lib/transit/headways-detector.ts", { mocks: { "./realtime": realtime, "./dwell": dwell } });
 const NOW = Date.parse("2026-11-08T12:00:00Z");
 const plain = (value) => JSON.parse(JSON.stringify(value));
@@ -144,14 +147,15 @@ test("source interruption or poll gap rotates continuity and cannot create an ap
 function storageHarness(options = {}) {
   const { network, lookup } = fixture(), writes = [], reads = [];
   let fail = Boolean(options.fail);
-  const tx = { $executeRaw: async (query, ...values) => { const sql = query.join("?"); writes.push({ sql, values }); if (fail && sql.includes("INSERT INTO")) throw new Error("Mock DB unavailable"); return 1; } };
-  const prisma = { $transaction: async (callback) => callback(tx), $queryRaw: async (query) => {
+  const tx = { $queryRaw: async () => [], $executeRaw: async (query, ...values) => { const sql = query.join("?"); writes.push({ sql, values }); if (fail && sql.includes("INSERT INTO")) throw new Error("Mock DB unavailable"); return 1; } };
+  const prisma = { $transaction: async (callback, options) => callback(options?.isolationLevel === "RepeatableRead" ? prisma : tx), $queryRaw: async (query) => {
     reads.push(query.join("?"));
-    return query.join("").includes("COUNT(*)") ? [{ healthy: 1n, received: 2n, eligible: 1n }] : [];
+    return query.join("").includes("FROM transit_headway_minutes") ? [{ minute: new Date(NOW - 60_000), healthy: true, received: 2, eligible: 1 }] : [];
   } };
   const storage = loadTypeScript("lib/transit/headways-storage.ts", { env: { DATABASE_URL: "mock-only", ...options.env }, mocks: {
     "@/lib/prisma": { prisma }, "./network": { getTransitNetwork: async () => network, getTripLookup: async () => lookup },
     "./headways-detector": detector, "./headways": core, "./time": time,
+    "./headways-calendar": calendar, "./headways-filters": filters, "./headways-aggregate": aggregate,
   } });
   return { storage, writes, reads, network, lookup, recover: () => { fail = false; }, breakDatabase: () => { fail = true; } };
 }
@@ -183,7 +187,8 @@ test("coverage is source availability, never an invented network service percent
   const h = storageHarness();
   const response = plain(await h.storage.getHeadwayStatistics(new Date(NOW)));
   assert.equal(response.observed.status, "collecting"); assert.equal(response.observed.coverage.healthyMinutes, 1);
-  assert.equal(response.observed.coverage.expectedMinutes, 360); assert.equal(response.observed.coverage.observedStopDirections, 0);
+  assert.equal(response.observed.coverage.expectedMinutes, 27 * 840 + 360); assert.equal(response.observed.coverage.observedStopDirections, 0);
+  assert.equal(response.selection.dateCount, 28); assert.equal(response.observed.coverage.coveredDays, 1);
   assert.equal(response.observed.windowEnd, "2026-11-08T12:00:00.000Z");
   assert.equal(response.window.end, "2026-11-08T20:00:00.000Z"); assert.equal(response.observed.partial, true);
 });
@@ -220,12 +225,13 @@ test("isolated PostgreSQL: JSON passage insert, durable deduplication, coverage,
   const client = new PrismaClient({ datasources: { db: { url: integrationUrl } }, log: [] });
   t.after(() => client.$disconnect());
   await migrateTransit(client); await migrateTransit(client);
-  await client.$executeRawUnsafe("TRUNCATE transit_stop_passages, transit_headway_minutes");
+  await client.$executeRawUnsafe("TRUNCATE transit_stop_passages, transit_headway_minutes, transit_headway_daily");
   const { network, lookup, trip } = fixture(); trip("next-observed", "1", 13 * 3600 - 75);
   function module() {
     return loadTypeScript("lib/transit/headways-storage.ts", { env: { DATABASE_URL: integrationUrl }, mocks: {
       "@/lib/prisma": { prisma: client }, "./network": { getTransitNetwork: async () => network, getTripLookup: async () => lookup },
       "./headways-detector": detector, "./headways": core, "./time": time,
+      "./headways-calendar": calendar, "./headways-filters": filters, "./headways-aggregate": aggregate,
     } });
   }
   const first = module();

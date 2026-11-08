@@ -457,3 +457,16 @@ model TransitHeadwayMinute {
 
   @@map("transit_headway_minutes")
 }
+
+// Compact exact gap histograms and source coverage. No vehicle IDs or GPS.
+model TransitHeadwayDaily {
+  day             DateTime @id @db.Date
+  networkVersion  String   @map("network_version")
+  distribution    Json
+  coverage        Json
+  observedThrough DateTime @map("observed_through") @db.Timestamptz(3)
+  rawTruncated    Boolean  @default(false) @map("raw_truncated")
+  computedAt      DateTime @default(now()) @map("computed_at") @db.Timestamptz(3)
+
+  @@map("transit_headway_daily")
+}

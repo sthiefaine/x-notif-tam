@@ -53,6 +53,12 @@ const statements = [
     minute TIMESTAMPTZ(3) PRIMARY KEY, healthy BOOLEAN NOT NULL,
     received INTEGER NOT NULL, eligible INTEGER NOT NULL
   )`,
+  `CREATE TABLE IF NOT EXISTS transit_headway_daily (
+    day DATE PRIMARY KEY, network_version TEXT NOT NULL,
+    distribution JSONB NOT NULL, coverage JSONB NOT NULL,
+    observed_through TIMESTAMPTZ(3) NOT NULL, raw_truncated BOOLEAN NOT NULL DEFAULT false,
+    computed_at TIMESTAMPTZ(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
+  )`,
   `DO $$ BEGIN
     IF to_regclass('public.alerts') IS NOT NULL THEN
       INSERT INTO publication_ledger (alert_id, status)
