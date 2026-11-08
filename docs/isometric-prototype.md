@@ -1,43 +1,28 @@
-# Montpellier dessinée : du pilote à la carte 3D
+# Montpellier dessinée — illustration fixe
 
-Le rendu retenu est une véritable scène 3D navigable : la géométrie publique
-CityGML de Montpellier (2020) conserve les volumes et toitures, tandis que deux
-matériaux originaux générés par IA habillent façades et toits. Les positions des
-arbres viennent de l’inventaire municipal ; leurs formes et tailles sont stylisées.
+Le rendu retenu est désormais une illustration à caméra fixe, orientée au nord,
+consultable dans l’atelier non indexé `/lab/illustration`. On peut zoomer et se
+déplacer dans le dessin, sans changer l’angle de vue.
 
-Le premier cadrage est Comédie–Saint-Roch. Les données compilées couvrent toute
-la commune : 42 085 bâtiments répartis en 315 tuiles et 60 648 arbres. La scène
-charge les détails seulement autour de la vue ; elle ne charge pas les 85 Mo
-complets au démarrage. Les boutons permettent de zoomer, tourner, incliner et
-recentrer la carte.
+Le nouvel échantillon couvre le centre élargi : Peyrou, Écusson, Comédie,
+Esplanade, Corum, Saint-Roch et une partie d’Antigone. Les vues rapprochées
+Google Maps fournissent les détails ; la vue générale fixe la composition.
+Le [journal de production et le prompt exact](fixed-camera-pilot.md) décrivent
+les références, le fichier publié et les limites du résultat.
 
-- [Sources, méthode, licence, limites et reproduction](montpellier-city-production.md).
-- [Prompts exacts et fichiers des matériaux IA](city-materials-prompts.md).
-- [Échantillon illustré à caméra fixe et son prompt](fixed-camera-pilot.md) :
-  un seul cadrage du centre, à comparer avec la 3D libre. Le catalogue géométrique
-  complet ne signifie pas que toute la ville est déjà redessinée en atlas.
+Il ne s’agit pas encore d’un atlas continu de toute Montpellier : pas de calage
+GPS certifié, de raccords validés ou de véhicules temps réel sur ce dessin.
 
-## Rôle de Google Maps
+## Ancienne voie de rendu
 
-La vue 3D Google Maps indiquée par l’utilisateur sert de référence visuelle de
-niveau de détail et de cadrage pendant la préparation. Les premières images
-fixes ont permis d’évaluer le style, mais ne sont pas le fond de la carte actuelle.
-Aucun SDK Google, capture satellite, photomaillage Google ou texture Google n’est
-intégré à cette scène. Les prompts des matériaux sont textuels, sans image Google.
-Aucune clé Google Maps n’a été créée ou configurée pour ce pilote.
+La scène native à caméra libre a été retirée à la demande de l’utilisateur.
+`/lab/3d` redirige définitivement vers l’illustration et les 85 Mo de données
+CityGML compilées ne sont plus servis depuis `public/city`. Les sources compilées
+ont été préservées hors dépôt ; leur historique reste récupérable dans Git.
 
-Assembler des captures indépendantes aurait demandé environ 1 700 dessins au
-pas proposé de 192 m utiles, avec des problèmes de perspective et de raccords.
-L’URL Google ne définit d’ailleurs pas seule une résolution métrique certifiée.
-La géométrie commune permet ici de garder les rues et les volumes indépendants
-de l’habillage, et de changer librement de caméra.
+- [Production et validation historique du CityGML](montpellier-city-production.md).
+- [Prompts historiques des matériaux originaux](city-materials-prompts.md).
 
-## Limites du premier rendu
-
-- Le millésime des bâtiments est 2020, pas une reconstruction actuelle garantie.
-- Les façades, matières et dimensions des arbres sont des interprétations.
-- Le relief entre les bâtiments n’est pas reconstitué : chaque bâtiment est
-  abaissé jusqu’à son sol local pour le fond de carte plan.
-- Les véhicules et alertes de la carte principale ne sont pas encore superposés
-  à cet atelier. Leur calage et leur visibilité derrière les bâtiments restent
-  une étape distincte.
+Aucun SDK ni clé Google Maps n’est intégré au site. Le dessin publié est une
+interprétation IA de références Google et conserve ce crédit ; il n’est pas
+présenté comme une donnée ouverte issue uniquement du CityGML.

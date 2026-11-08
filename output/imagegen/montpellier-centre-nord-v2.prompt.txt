@@ -1,0 +1,19 @@
+Use case: stylized-concept / style-transfer.
+Asset type: large detailed fixed-camera illustrated city atlas sample for Montpellier.
+
+Generate a NEW, larger continuous drawing of central Montpellier using the supplied real aerial references. Create the highest native landscape detail available, aiming for 3840 x 2160 pixels. This must be a newly rendered broad scene with fine architectural detail, not an enlargement of the old illustration and not a collage of separate views.
+
+INPUT ROLES:
+Image 1 is the STRICT overall geographic layout, extent, orientation and composition reference. It shows the expanded centre, Peyrou at upper left, dense Ecusson left/centre, Place de la Comedie below centre, Gare Saint-Roch towards the lower centre, Esplanade and Corum above/right, Joffre and western Antigone to the right.
+Image 2 is the close detail reference for Place de la Comedie, Opera and nearby streets.
+Image 3 is the close detail reference for Gare Saint-Roch, railway platform canopy and square Planchon.
+Image 4 is the close detail reference for Corum and Esplanade Charles-de-Gaulle.
+Image 5, supplied by the user, is the STYLE and CAMERA ORIENTATION reference ONLY, covering a smaller extent. Keep this warm, fine, clean architectural illustration style, but use the larger geographic extent from image 1.
+
+CAMERA: fixed oblique aerial perspective looking north, north at top, south at bottom, west at left, east at right, around 39 degrees tilt as the photos. Comedie remains ABOVE the railway station, Ecusson remains LEFT of Esplanade. Do not rotate east or introduce a different perspective. No horizon, no cutaway floating island, no isolated city model.
+
+STYLE: richly detailed hand-drawn high-bit pixel-art / miniature illustrated city with crisp fine architectural outlines, individual terracotta roof tiles, coherent windows, shutters, chimneys, dormers, roof ridges, cream limestone facades, Mediterranean pale paving and lush green canopies. The close photos should inform real roof and facade structure, not just add generic noise. Natural warm daylight, consistent soft shadows, beautiful readable street spaces, strong depth, consistent detail over the entire scene. Match image 5's illustration craft, without chunky low-resolution pixel blocks or photoreal satellite texture.
+
+GEOGRAPHY: retain the actual street intersections, landmark silhouettes, courtyard openings, irregular roof forms, dense block boundaries, railway direction and plaza shapes from image 1. Transfer close details only into their geographically corresponding area. Preserve small original fountain basins. Do not invent new large pools, monuments, roads, generic Parisian boulevards or repeated identical blocks. Do not paste an enlarged building from a close view onto a different neighbourhood. Do not duplicate landmarks.
+
+OUTPUT: one seamless broad rectangular finished city illustration filling the canvas edge to edge. Reconstruct the visible city behind UI overlays using the overlapping reference views; remove all map controls, search bars, tooltips, logos, map labels and buttons from the city art. Do not add people, vehicles, titles or place labels. Do not draw a footer: the application will display source attribution separately. Keep the full broader coverage from image 1 rather than cropping back to Comedie.

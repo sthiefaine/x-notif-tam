@@ -1,4 +1,11 @@
-# Montpellier : atlas natif des bâtiments 3D
+# Montpellier : atlas natif des bâtiments 3D — archive
+
+> Depuis le 9 novembre 2026, cette voie de rendu est archivée. Le mode public
+> à caméra libre et `public/city` ont été retirés ; `/lab/3d` redirige vers
+> l’illustration fixe. Les chiffres et chemins ci-dessous décrivent la
+> compilation validée du 8 novembre, récupérable dans l’historique Git
+> (`6b52f55650050022658a1ffa7eea35581227c60b`). Une copie complète des
+> fichiers compilés a également été conservée hors dépôt.
 
 L’atlas utilise les géométries publiques des bâtiments de Montpellier, millésime
 2020. Il remplace, pour cette voie de rendu, la référence photographique fixe par

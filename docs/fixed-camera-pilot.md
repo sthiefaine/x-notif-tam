@@ -1,35 +1,65 @@
-# Échantillon illustré à caméra fixe — Comédie
+# Échantillon illustré fixe — centre élargi, nord en haut
 
-Ce rendu compare une illustration dessinée à la maquette 3D libre. Il couvre
-uniquement le cadrage du centre présenté sur `/lab/illustration` ; il ne constitue
-pas encore un atlas dessiné de toute la ville. La [vue 3D](montpellier-city-production.md)
-utilise en revanche le catalogue de bâtiments 2020 compilé sur toute la commune.
+Publié sur `/lab/illustration`. L’ancien `/lab/3d` redirige définitivement vers
+cette page ; son modèle de 85 Mo n’est plus servi publiquement.
 
-- Image : `public/lab/montpellier-centre-illustration.png`.
-- Outil : génération d’image intégrée, mode transfert de style.
-- Référence : capture du modèle CityGML de Montpellier avec les matériaux IA
-  originaux et les arbres municipaux symbolisés. Aucune image Google en entrée.
-- Cadrage : centre [3.8794,43.6081], zoom 18.2, inclinaison 55°, direction 90°,
-  navigateur 1280 × 720 ; l’interface est retirée par le redessin.
-- Crédit : bâtiments © Montpellier Méditerranée Métropole / Avineon, 2020, ODbL.
+## Image retenue
 
-Les façades, matières et certains détails sont interprétés. Ce dessin n’a pas
-passé de validation de calage GPS. Il ne reçoit donc aucun faux véhicule en direct.
-Un atlas continu demanderait une projection commune, des recouvrements et une
-validation géométrique de chaque raccord ; une belle image ne démontre pas cela.
+- Fichier : `public/lab/montpellier-centre-nord-v2.png`.
+- Dimensions natives : **1672 × 941 px**, 4 745 091 octets.
+- SHA-256 : `45179eef5f3190f166be652922e2935819997302ab38ca63183a8faf4c46c0bf`.
+- Outil : génération d’image intégrée, références de composition et transfert de style.
+- Zone plus étendue que le précédent échantillon Comédie : Peyrou, Écusson,
+  Comédie, Esplanade–Corum, Saint-Roch et bordure ouest d’Antigone.
+- Caméra : nord en haut, environ 39° d’inclinaison ; Comédie au-dessus de la gare.
+- Crédit visible dans l’interface : **Illustration IA · Référence : Google Maps.
+  Images ©2026 Google.** Aucun SDK ou clé Google n’est intégré au site.
 
-## Prompt exact
+Le fichier est un nouveau dessin, pas un agrandissement de l’ancien. Le prompt
+visait une résolution native supérieure, mais l’outil a livré 1672 × 941 px :
+ce résultat n’est donc pas présenté comme du 4K. Le gain porte sur l’étendue
+représentée et les références architecturales rapprochées ; le zoom au-delà
+des pixels natifs ne crée pas de détail supplémentaire.
 
-```text
-Use case: style-transfer.
-Asset: a fixed-camera illustrated atlas pilot of Place de la Comédie, Montpellier.
-Input image 1 is the strict geometric reference and edit target: an actual georeferenced 3D rendering of official 2020 Montpellier building geometry, with symbolic municipal trees.
+## Références capturées le 9 novembre 2026
 
-Transform the CITY ONLY into a beautiful, richly detailed high-bit pixel-art miniature that feels drawn by a skilled game environment artist, rather than like a plain GIS model. Fine crisp pixel craft, thin readable architectural outlines, individual terracotta roof tiles, varied pale limestone and cream façades, coherent windows and shutters, restrained ornamental stone details, lively soft green tree canopies and warm stone plaza paving. Subtle coherent daylight and contact shadows, excellent visual depth. Keep the actual irregular Mediterranean building forms; do not substitute generic Parisian blocks.
+Sept vues anonymes Google Maps, même orientation, navigateur 1280 × 720.
+Les cinq vues les plus proches sont environ quatre fois plus rapprochées que
+la vue générale (indication de caméra ~377 m contre ~1534 m, pas une échelle
+métrique certifiée). Les coordonnées dans les URL Google décrivent la caméra.
 
-CRITICAL: preserve the exact source camera, perspective, street edges and intersections, central plaza shape, building footprints, silhouettes, roof shapes, dormers, courtyard holes and tree locations. Keep the large open Place de la Comédie and the small existing pale-blue fountain basin in their same positions. Preserve the separation between buildings and all visible passages. The illustrated façade details may be interpreted, but the city layout must stay aligned. No new monuments, roads, large pools, extra tree rows, shifted blocks, people or vehicles.
+1. [Vue d’ensemble élargie, nord en haut](https://www.google.com/maps/@43.59761,3.8788,1534a,35y,39.03t/data=!3m1!1e3) — `01-overview.png`.
+2. [Comédie, Écusson, Polygone à deux fois le rapprochement](https://www.google.com/maps/@43.6032076,3.8791885,762a,35y,39.21t/data=!3m1!1e3) — `02-comedie-ecusson.png`.
+3. [Détail Comédie et Opéra, quatre fois plus proche](https://www.google.com/maps/@43.6060214,3.8793828,377a,35y,39.34t/data=!3m1!1e3) — `03-comedie-close.png`.
+4. [Détail gare Saint-Roch et square Planchon](https://www.google.com/maps/@43.6016465,3.8793693,386a,35y,39.34t/data=!3m1!1e3) — `04-gare-saint-roch-close.png`.
+5. [Détail Peyrou, arc de triomphe, boulevard du Jeu de Paume, Sainte-Anne](https://www.google.com/maps/@43.606985,3.8722492,372a,35y,39.34t/data=!3m1!1e3) — `05-peyrou-ecusson-close.png`.
+6. [Détail Corum et Esplanade Charles-de-Gaulle](https://www.google.com/maps/@43.6100767,3.8817709,377a,35y,39.34t/data=!3m1!1e3) — `06-corum-esplanade-close.png`.
+7. [Détail de la bordure ouest d’Antigone et du lycée Joffre](https://www.google.com/maps/@43.60767,3.8867683,384a,35y,39.34t/data=!3m1!1e3) — `07-antigone-joffre-close.png`.
 
-Crop away the application header, buttons, compass, scale, captions and interface overlays. Work only with the unobstructed city image; do not expand the scene to invent hidden streets. No title, interface or place-name labels in the city artwork.
-Include a discreet white attribution strip below the image with this exact text: "Illustration IA — Bâtiments © Montpellier Méditerranée Métropole / Avineon, 2020 — ODbL."
-Return one finished landscape illustration, keeping the same city framing.
-```
+Les captures sources sont conservées hors dépôt dans le dossier de travail
+`fixed-north-v2`, avec un journal `references.json`. L’image fournie par
+l’utilisateur fixe le style et l’orientation ; la nouvelle vue générale fixe
+la couverture plus large.
+
+L’appel retenu utilise la vue générale, les détails Comédie, Saint-Roch et
+Corum, plus la référence de style utilisateur. Un second essai ajoute les vues
+Peyrou et Antigone, mais a été écarté : il modifiait trop certains monuments.
+Le fichier publié correspond au premier essai, jugé plus fidèle au cadrage.
+
+## Consultation et limites
+
+Le dessin remplit l’écran au départ, y compris sur mobile. Les boutons + / −,
+le glisser, le pincement et le clavier permettent de se déplacer sans changer
+l’orientation. « Tout voir » montre l’ensemble. Le zoom conserve le point vu.
+Le crédit reste visible et l’image originale est accessible dans l’en-tête.
+
+Les façades, matières, arbres et certains détails sont interprétés. Aucun
+calage GPS ou raccord d’atlas n’est certifié ; aucun véhicule en direct n’est
+superposé à cette image. Ce n’est pas encore toute Montpellier redessinée.
+La référence Google reste créditée : un redessin IA ne transforme pas sa source
+en donnée ouverte CityGML.
+
+## Prompt exact retenu
+
+Voir [`montpellier-centre-nord-v2.prompt.txt`](../output/imagegen/montpellier-centre-nord-v2.prompt.txt).
+Les indices d’images correspondent aux cinq entrées de l’appel retenu ci-dessus.
