@@ -1,13 +1,12 @@
-# Use Node.js 20 LTS
-FROM node:20-alpine
+# Chromium système pour le mode navigateur ; aucun téléchargement au démarrage.
+FROM node:22-bookworm-slim
 
-# DATABASE_URL est nécessaire au build (la page d'accueil lit la base via
-# unstable_cache lors du prerender).
-ARG DATABASE_URL
-ENV DATABASE_URL=$DATABASE_URL
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends chromium curl ca-certificates fonts-liberation \
+    && rm -rf /var/lib/apt/lists/*
 
-# curl utile pour les health-checks / crons
-RUN apk add --no-cache curl
+ENV CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium
+ENV TZ=Europe/Paris
 
 # Verify Node.js version
 RUN node --version && npm --version
@@ -20,7 +19,7 @@ COPY package*.json ./
 COPY prisma ./prisma/
 
 # Install dependencies
-RUN npm install
+RUN npm ci
 
 # Generate Prisma client
 RUN npx prisma generate
@@ -30,6 +29,9 @@ COPY . .
 
 # Build the application
 RUN npm run build
+
+RUN mkdir -p /app/.x-browser && chown -R node:node /app
+USER node
 
 # Expose port
 EXPOSE 3000

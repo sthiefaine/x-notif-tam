@@ -1,9 +1,28 @@
 import { prisma } from "@/lib/prisma";
 import { Alert } from "@prisma/client";
-import { postToX, isXApiConfigured } from "./xApiClient";
+import type { XApiError } from "./xApiClient";
+import { getPublisherConfiguration, createTextPublisher } from "./publisher";
 
 const wait = (ms: number): Promise<void> =>
   new Promise((resolve) => setTimeout(resolve, ms));
+
+export const getPublicationWindow = (now = new Date()) => {
+  const start = new Date(now);
+  const end = new Date(now);
+  start.setHours(0, 0, 0, 0);
+  end.setHours(23, 59, 59, 999);
+  return { gte: start, lte: end };
+};
+
+export type PostingResult = {
+  success: boolean;
+  loginMessage: string;
+  processed: number;
+  failed: number;
+  messages: string[];
+  httpStatus?: number;
+  errors?: XApiError[];
+};
 
 /**
  * Determines if a route is a tramway (lines 1-5) or bus
@@ -182,57 +201,59 @@ export const formatTweetFromAlertGroup = (alerts: Alert[]): string => {
 };
 
 /**
- * Se connecte à X via l'API officielle et publie les alertes non postées du
- * jour, en regroupant celles qui partagent le même en-tête.
- *
- * Remplace l'ancien flux Puppeteer (login navigateur + cookies). Aucune
- * session n'est nécessaire : l'authentification se fait par OAuth 1.0a.
- *
- * Tant que les variables X_API_* ne sont pas définies, cette fonction ne fait
- * RIEN (retourne "X API non configurée") : la migration peut donc être
- * déployée sans rien activer.
+ * Publie les alertes du jour avec le mode explicitement choisi (navigateur
+ * ou API). Une configuration manquante ne déclenche aucune publication.
  * @returns Résumé du processus de publication
  */
-export const postToTwitter = async (): Promise<{
-  success: boolean;
-  loginMessage: string;
-  processed: number;
-  failed: number;
-  messages: string[];
-}> => {
-  console.log("Starting postToTwitter process (X API)");
+export const postToTwitter = async (): Promise<PostingResult> => {
+  const configuration = getPublisherConfiguration();
+  console.log(`Starting postToTwitter process (${configuration.mode})`);
 
-  if (!isXApiConfigured()) {
-    console.log("X API non configurée — aucune publication.");
+  if (!configuration.configured) {
     return {
       success: false,
-      loginMessage: "X API non configurée",
+      loginMessage: configuration.message,
       processed: 0,
       failed: 0,
-      messages: [
-        "Identifiants X API manquants (X_API_KEY, X_API_SECRET, X_ACCESS_TOKEN, X_ACCESS_SECRET)",
-      ],
+      httpStatus: 503,
+      messages: [configuration.message],
     };
   }
 
   const messages: string[] = [];
+  const errors: XApiError[] = [];
   let processed = 0;
   let failed = 0;
   let alertIds: string[] = [];
+  const heldIds = new Set<string>();
+  const claimedAt = new Date();
+  let publisher: ReturnType<typeof createTextPublisher> | undefined;
 
   try {
-    // Récupérer les alertes non postées d'aujourd'hui
-    const unpostedAlerts = await prisma.alert.findMany({
-      where: {
-        isPosted: false,
-        isProcessing: false,
-        timeStart: {
-          gte: new Date(new Date().setHours(0, 0, 0, 0)),
-          lte: new Date(new Date().setHours(23, 59, 59, 999)),
+    // Acquisition atomique du lot. Le verrou ne couvre que les requêtes DB,
+    // jamais les appels réseau à X, et fonctionne entre plusieurs instances.
+    const unpostedAlerts = await prisma.$transaction(async (tx) => {
+      const locks = await tx.$queryRaw<Array<{ locked: boolean }>>`
+        SELECT pg_try_advisory_xact_lock(727043, 1) AS locked
+      `;
+      if (!locks[0]?.locked) return [];
+
+      const alerts = await tx.alert.findMany({
+        where: {
+          isPosted: false,
+          isProcessing: false,
+          timeStart: getPublicationWindow(),
         },
-      },
-      orderBy: { timeStart: "asc" },
-      take: 20,
+        orderBy: { timeStart: "asc" },
+        take: 20,
+      });
+      if (alerts.length > 0) {
+        await tx.alert.updateMany({
+          where: { id: { in: alerts.map((alert) => alert.id) } },
+          data: { isProcessing: true, inProcessSince: claimedAt },
+        });
+      }
+      return alerts;
     });
 
     console.log(`Found ${unpostedAlerts.length} unposted alerts`);
@@ -247,15 +268,12 @@ export const postToTwitter = async (): Promise<{
       };
     }
 
-    // Marquer les alertes comme en cours de traitement (verrou anti-doublon)
     alertIds = unpostedAlerts.map((alert) => alert.id);
-    await prisma.alert.updateMany({
-      where: { id: { in: alertIds } },
-      data: { isProcessing: true, inProcessSince: new Date() },
-    });
+    const pendingIds = new Set(alertIds);
 
     // Regrouper par en-tête
     const groupedAlerts = groupAlertsByHeader(unpostedAlerts);
+    publisher = createTextPublisher();
     console.log(
       `Grouped into ${Object.keys(groupedAlerts).length} distinct alert headers`
     );
@@ -263,16 +281,32 @@ export const postToTwitter = async (): Promise<{
     // Publier chaque groupe
     for (const [headerText, alertGroup] of Object.entries(groupedAlerts)) {
       const groupAlertIds = alertGroup.map((alert) => alert.id);
+      groupAlertIds.forEach((id) => pendingIds.delete(id));
+      let stopBatch = false;
 
       try {
         const tweetContent = formatTweetFromAlertGroup(alertGroup);
-        const result = await postToX(tweetContent);
+        // Persister le marqueur AVANT l'envoi : un crash ou une panne DB après
+        // acceptation par X ne doit jamais libérer automatiquement ce groupe.
+        const prepared = await prisma.alert.updateMany({
+          where: {
+            id: { in: groupAlertIds }, isPosted: false, isProcessing: true,
+            inProcessSince: claimedAt,
+          },
+          data: { inProcessSince: null },
+        });
+        groupAlertIds.forEach((id) => heldIds.add(id));
+        if (prepared.count !== groupAlertIds.length) {
+          throw new Error("Le lot a changé avant la publication");
+        }
+        const result = await publisher.postText(tweetContent);
 
         if (result.success) {
           await prisma.alert.updateMany({
             where: { id: { in: groupAlertIds } },
-            data: { isPosted: true, isProcessing: false },
+            data: { isPosted: true, isProcessing: false, inProcessSince: null },
           });
+          groupAlertIds.forEach((id) => heldIds.delete(id));
           processed += alertGroup.length;
           messages.push(
             `Posté ${alertGroup.length} alerte(s) "${headerText}" (tweet ${
@@ -280,27 +314,56 @@ export const postToTwitter = async (): Promise<{
             })`
           );
         } else {
-          // Échec : libérer le verrou pour réessai au prochain cron
-          await prisma.alert.updateMany({
-            where: { id: { in: groupAlertIds }, isPosted: false },
-            data: { isProcessing: false },
-          });
+          // Sans confirmation après envoi, conserver l'alerte pour contrôle
+          // manuel. Un réessai automatique pourrait publier un doublon.
+          if (!result.error.uncertain) {
+            await prisma.alert.updateMany({
+              where: { id: { in: groupAlertIds }, isPosted: false },
+              data: { isProcessing: false, inProcessSince: null },
+            });
+            groupAlertIds.forEach((id) => heldIds.delete(id));
+          }
           failed += alertGroup.length;
           messages.push(`Échec "${headerText}": ${result.message}`);
+          if (result.error.uncertain) {
+            messages.push("Publication incertaine : vérifier le compte avant de libérer cette alerte en base.");
+          }
+          errors.push(result.error);
+
+          // Une limite de quota ou un problème d'authentification concerne
+          // tout le compte : ne pas multiplier les appels refusés dans ce lot.
+          stopBatch = configuration.mode === "browser"
+            || [401, 402, 403, 429].includes(result.error.status ?? 0);
         }
       } catch (error) {
-        await prisma.alert.updateMany({
-          where: { id: { in: groupAlertIds }, isPosted: false },
-          data: { isProcessing: false },
-        });
+        const needsReview = groupAlertIds.some((id) => heldIds.has(id));
+        if (!needsReview) {
+          await prisma.alert.updateMany({
+            where: { id: { in: groupAlertIds }, isPosted: false, inProcessSince: claimedAt },
+            data: { isProcessing: false, inProcessSince: null },
+          });
+        }
         failed += alertGroup.length;
-        messages.push(
-          `Erreur "${headerText}": ${
-            error instanceof Error ? error.message : String(error)
-          }`
-        );
+        console.error("Échec du traitement d'un groupe:",
+          error instanceof Error ? error.name : "Erreur inconnue");
+        const detail = needsReview
+          ? "Publication ou confirmation en base interrompue : vérifier le compte avant de libérer l'alerte."
+          : "Impossible de préparer le groupe en base ; aucun envoi effectué.";
+        errors.push({ status: 503, code: "POSTING_STATE_FAILED", detail, uncertain: needsReview });
+        messages.push(`Erreur pour "${headerText}": ${detail}`);
+        stopBatch = true;
       }
 
+      if (stopBatch) {
+        await prisma.alert.updateMany({
+          where: {
+            id: { in: Array.from(pendingIds) }, isPosted: false,
+            inProcessSince: claimedAt,
+          },
+          data: { isProcessing: false, inProcessSince: null },
+        });
+        break;
+      }
       // Petite pause entre les posts
       await wait(1000);
     }
@@ -311,26 +374,38 @@ export const postToTwitter = async (): Promise<{
       processed,
       failed,
       messages,
+      httpStatus: failed === 0 ? 200 : errors.some((error) => error.status === 429) ? 429 : 502,
+      errors: errors.length > 0 ? errors : undefined,
     };
   } catch (error) {
-    console.error("Error in postToTwitter:", error);
-    // Libérer le verrou sur toutes les alertes non encore postées
-    if (alertIds.length > 0) {
-      await prisma.alert.updateMany({
-        where: { id: { in: alertIds }, isPosted: false },
-        data: { isProcessing: false },
-      });
+    console.error("Error in postToTwitter:",
+      error instanceof Error ? error.name : "Erreur inconnue");
+    // Les groupes préparés ou incertains ne passent jamais par ce nettoyage.
+    const releasableIds = alertIds.filter((id) => !heldIds.has(id));
+    if (releasableIds.length > 0) {
+      try {
+        await prisma.alert.updateMany({
+          where: { id: { in: releasableIds }, isPosted: false, inProcessSince: claimedAt },
+          data: { isProcessing: false, inProcessSince: null },
+        });
+      } catch {
+        console.error("Impossible de libérer le lot d'alertes en base.");
+      }
     }
     return {
       success: false,
       loginMessage: "Erreur",
       processed,
       failed,
-      messages: [
-        `Erreur postToTwitter: ${
-          error instanceof Error ? error.message : String(error)
-        }`,
-      ],
+      httpStatus: 503,
+      messages: [...messages, "Impossible de terminer le traitement des alertes en base."],
+      errors: errors.length > 0 ? errors : undefined,
     };
+  } finally {
+    try {
+      await publisher?.close();
+    } catch {
+      console.warn("Le navigateur de publication n'a pas pu se fermer proprement.");
+    }
   }
 };

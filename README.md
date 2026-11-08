@@ -20,9 +20,9 @@ Le système se compose de deux parties principales :
 
 - **Backend**: Next.js (API Routes)
 - **Base de données**: PostgreSQL avec Prisma ORM
-- **Automatisation web**: Puppeteer pour interagir avec Twitter
-- **Planification**: Vercel Cron Jobs
-- **Déploiement**: Vercel
+- **Publication X** : navigateur avec session réutilisable ; API officielle v2 en option
+- **Planification** : tâches Coolify ou Vercel Cron Jobs
+- **Déploiement** : Docker/Coolify ; configuration Vercel également disponible
 
 ## Schéma de fonctionnement
 
@@ -48,10 +48,10 @@ Le système se compose de deux parties principales :
 
 ### Prérequis
 
-- Node.js 18+ > 22+
+- Node.js 20.19+ en local ; image Docker Node.js 22 avec Chromium
 - PostgreSQL
-- Compte Twitter/X pour l'API
-- Compte Vercel pour le déploiement et les cron jobs
+- Compte X et session navigateur ; application développeur X uniquement pour le mode API
+- Hébergement Docker/Coolify ou Vercel avec des tâches planifiées
 
 ### Variables d'environnement
 
@@ -59,10 +59,19 @@ Le système se compose de deux parties principales :
 # Base de données
 DATABASE_URL=postgresql://user:password@host:port/database
 
-# Twitter/X
-USER_EMAIL=votre-email-twitter@exemple.com
-USER_PASSWORD=votre-mot-de-passe-twitter
-USER_HANDLE=votre-identifiant-twitter
+# Protection des tâches de collecte et de publication
+CRON_SECRET=un-secret-long-et-aleatoire
+
+# Navigateur : session créée manuellement via npm run x:login
+X_POSTING_MODE=browser
+X_BROWSER_SESSION_PATH=.x-browser/session.json
+X_ACCOUNT_HANDLE=@votre-compte
+
+# API officielle X facultative (uniquement avec X_POSTING_MODE=api)
+X_API_KEY=
+X_API_SECRET=
+X_ACCESS_TOKEN=
+X_ACCESS_SECRET=
 
 # Configuration
 NODE_ENV=production
@@ -76,25 +85,29 @@ git clone https://github.com/sthiefaine/x-notif-tam.git
 
 # Installer les dépendances
 cd x-notif-tam
-npm install
+npm ci
 
-# Configurer la base de données
-npx prisma migrate deploy
+# Générer le client de la base existante
+npm run prisma:generate
 
 # Démarrer en développement
 npm run dev
 ```
 
+Le dépôt ne contient pas d'historique de migrations. Pour une reprise, conserver la base PostgreSQL existante et vérifier sa compatibilité avec `prisma/schema.prisma` ; ne pas la réinitialiser. Le mode navigateur n'utilise aucune clé d'API payante. Sans choix de mode explicite, la publication reste désactivée. Voir [l'automatisation et la reprise](README_AUTO.md) pour la création de session et les limites de l'automatisation sur X.
+
 ## Déploiement
 
-Le projet est configuré pour être déployé sur Vercel. Les cron jobs sont configurés dans le fichier `vercel.json` :
+Le `Dockerfile` construit l'application sans connexion à PostgreSQL et inclut Chromium. Renseigner `DATABASE_URL`, `CRON_SECRET` et le mode de publication au démarrage dans Coolify. En mode navigateur, monter le fichier de session dans un stockage persistant privé accessible à l'utilisateur `node` (UID 1000). Les commandes de tâches figurent dans `coolify.yaml` ; vérifier leur enregistrement dans l'interface Coolify.
+
+Pour Vercel, les cron jobs sont configurés dans `vercel.json`. Par exemple :
 
 ```json
 {
   "crons": [
     {
       "path": "/api/post_tweets",
-      "schedule": "*/15 * * * *"
+      "schedule": "*/2 3-18 * * *"
     }
   ]
 }
@@ -102,7 +115,7 @@ Le projet est configuré pour être déployé sur Vercel. Les cron jobs sont con
 
 ## Source des données
 
-Les données utilisées dans ce projet proviennent de [Montpellier Méditerranée Métropole](https://data.montpellier3m.fr/dataset/offre-de-transport-tam-en-temps-reel) via le jeu de données "Offre de transport TAM en temps réel".
+Les données proviennent de Montpellier Méditerranée Métropole, via le [flux commun d'alertes TaM référencé sur transport.data.gouv.fr](https://transport.data.gouv.fr/resources/84201?locale=fr) : `https://gtfsproxy.e-tam.fr/COMMON/Alert.pb`.
 
 ## Licence ODbL
 

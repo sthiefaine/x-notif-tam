@@ -3,6 +3,9 @@ import { unstable_cache } from "next/cache";
 import Link from "next/link";
 import Image from "next/image";
 
+// La base n'est nécessaire qu'au runtime, jamais pendant le build Docker.
+export const dynamic = "force-dynamic";
+
 const getRoutesLineNumbers = unstable_cache(
   async () => {
     const routes = await prisma.route.findMany({
@@ -11,16 +14,8 @@ const getRoutesLineNumbers = unstable_cache(
       },
     });
 
-    routes
-      .filter((route) => route.id.startsWith("7-"))
-      .map((route) => Number(route.id.split("-")[1]))
-      .sort((a, b) => {
-        return a - b;
-      });
-
-    return routes
-      .filter((route) => route.id.startsWith("7-"))
-      .map((route) => Number(route.id.split("-")[1]))
+    return [...new Set(routes.map((route) => Number(route.id.split("-").pop())))]
+      .filter((number) => Number.isFinite(number) && number > 0)
       .sort((a, b) => a - b);
   },
   ["routes-line-numbers"],

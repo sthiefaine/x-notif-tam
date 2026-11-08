@@ -11,10 +11,18 @@ const compat = new FlatCompat({
 });
 
 const eslintConfig = [
+  { ignores: [".next/**", "node_modules/**", "out/**", "build/**", "next-env.d.ts"] },
   ...compat.extends(
     "next/core-web-vitals",
     "next/typescript"
   ),
+  {
+    files: ["tests/**/*.cjs"],
+    rules: {
+      "@typescript-eslint/no-require-imports": "off",
+      "@next/next/no-assign-module-variable": "off",
+    },
+  },
   {
     languageOptions: {
       parserOptions: {

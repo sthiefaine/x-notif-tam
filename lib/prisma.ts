@@ -8,11 +8,11 @@ const globalForPrisma = global as unknown as {
 
 const createPrismaClient = () => new PrismaClient({
   log: process.env.NODE_ENV === 'development' ? ['query', 'error', 'warn'] : ['error'],
-  datasources: {
+  ...(process.env.DATABASE_URL ? { datasources: {
     db: {
       url: process.env.DATABASE_URL,
     },
-  },
+  } } : {}),
 });
 
 export const prisma = globalForPrisma.prisma ?? createPrismaClient();

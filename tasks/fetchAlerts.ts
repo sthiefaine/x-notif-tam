@@ -8,15 +8,33 @@ import {
 import crypto from "crypto";
 import { postToTwitter } from "@/app/api/post_tweets/postTweet";
 
-// La source TAM a changé de chemin : l'ancien /TAM_MMM_GTFSRT/Alert.pb renvoie 404.
-// Les alertes sont désormais réparties entre le réseau Urbain et Suburbain.
-// ALERT_URL peut surcharger (liste séparée par des virgules).
-const ALERT_URLS = process.env.ALERT_URL
-  ? process.env.ALERT_URL.split(",").map((u) => u.trim()).filter(Boolean)
-  : [
-      "https://data.montpellier3m.fr/GTFS/Urbain/Alert.pb",
-      "https://data.montpellier3m.fr/GTFS/Suburbain/Alert.pb",
-    ];
+// TaM diffuse désormais les alertes urbaines et suburbaines dans un flux commun.
+// Les anciens chemins data.montpellier3m.fr/GTFS/{Urbain,Suburbain} sont retirés.
+const configuredAlertUrls = process.env.ALERT_URL
+  ?.split(",")
+  .map((url) => url.trim())
+  .filter(Boolean);
+const ALERT_URLS = configuredAlertUrls?.length
+  ? configuredAlertUrls
+  : ["https://gtfsproxy.e-tam.fr/COMMON/Alert.pb"];
+const ALERT_FETCH_TIMEOUT_MS = 15_000;
+
+export interface AlertFeedResult {
+  url: string;
+  success: boolean;
+  processedEntities: number;
+  error?: string;
+}
+
+export interface AlertCollectionResult {
+  success: boolean;
+  status: "success" | "partial" | "failed";
+  totalFeeds: number;
+  successfulFeeds: number;
+  failedFeeds: number;
+  processedEntities: number;
+  feeds: AlertFeedResult[];
+}
 
 const PROTO_PATH = path.join(process.cwd(), "lib/gtfs-realtime.proto");
 
@@ -50,7 +68,10 @@ async function downloadAlertFile(url: string): Promise<Buffer> {
   console.log(`Téléchargement des alertes depuis ${url}`);
 
   try {
-    const response = await fetch(url);
+    const response = await fetch(url, {
+      cache: "no-store",
+      signal: AbortSignal.timeout(ALERT_FETCH_TIMEOUT_MS),
+    });
 
     if (!response.ok) {
       throw new Error(
@@ -404,30 +425,55 @@ async function triggerTweetPosting(): Promise<void> {
   }
 }
 
-export async function fetchAndProcessAlerts(): Promise<void> {
+export async function fetchAndProcessAlerts(): Promise<AlertCollectionResult> {
   try {
     await ensurePrismaConnection();
 
-    let totalEntities = 0;
+    const feeds: AlertFeedResult[] = [];
 
-    // Traiter chaque feed (Urbain + Suburbain). Un feed en échec ne doit pas
-    // empêcher le traitement des autres.
+    // Un flux en échec n'empêche pas le traitement des autres, mais son erreur
+    // reste visible dans le bilan et dans le statut HTTP de la tâche.
     for (const url of ALERT_URLS) {
       try {
         const alertBuffer = await downloadAlertFile(url);
         const feedMessage = await parseAlertFile(alertBuffer);
-        totalEntities += await saveAlerts(feedMessage);
+        const processedEntities = await saveAlerts(feedMessage);
+        feeds.push({ url, success: true, processedEntities });
       } catch (feedError) {
         console.error(`Erreur sur le feed ${url}:`, feedError);
+        feeds.push({
+          url,
+          success: false,
+          processedEntities: 0,
+          error: feedError instanceof Error ? feedError.message : String(feedError),
+        });
       }
     }
 
+    const successfulFeeds = feeds.filter((feed) => feed.success).length;
+    const processedEntities = feeds.reduce(
+      (total, feed) => total + feed.processedEntities,
+      0
+    );
+    const result: AlertCollectionResult = {
+      success: successfulFeeds === feeds.length,
+      status: successfulFeeds === feeds.length
+        ? "success"
+        : successfulFeeds > 0 ? "partial" : "failed",
+      totalFeeds: feeds.length,
+      successfulFeeds,
+      failedFeeds: feeds.length - successfulFeeds,
+      processedEntities,
+      feeds,
+    };
+
     // Déclencher la publication une seule fois, après tous les feeds.
-    if (totalEntities > 0) {
+    if (processedEntities > 0) {
       await triggerTweetPosting();
     }
 
-    console.log("Traitement des alertes terminé avec succès");
+    console.log("Bilan de collecte des alertes:", result);
+    return result;
   } catch (error) {
     console.error("Erreur lors du traitement des alertes:", error);
     throw error;
@@ -436,7 +482,7 @@ export async function fetchAndProcessAlerts(): Promise<void> {
 
 if (require.main === module) {
   fetchAndProcessAlerts()
-    .then(() => process.exit(0))
+    .then((result) => process.exit(result.success ? 0 : 1))
     .catch((err) => {
       console.error(err);
       process.exit(1);

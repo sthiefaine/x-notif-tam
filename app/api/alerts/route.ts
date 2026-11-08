@@ -48,11 +48,19 @@ export async function GET(request: NextRequest) {
     }
 
     if (route) {
+      const routeNumber = extractRouteNumber(route);
+      const routeIds = [...new Set([route, routeNumber, `7-${routeNumber}`, `8-${routeNumber}`])];
+      // Le flux actuel utilise "33", les anciennes données "7-33".
+      // Respecter les séparateurs pour ne pas confondre les lignes 3 et 33.
       whereClause = {
-        ...whereClause,
-        routeIds: route.includes("-")
-          ? `7-${route.split("-")[1]}`
-          : `7-${route}`,
+        AND: [whereClause, {
+          OR: routeIds.flatMap((id) => [
+            { routeIds: id },
+            { routeIds: { startsWith: `${id},` } },
+            { routeIds: { endsWith: `,${id}` } },
+            { routeIds: { contains: `,${id},` } },
+          ]),
+        }],
       };
     }
 
@@ -134,22 +142,31 @@ export async function GET(request: NextRequest) {
 
           const routeInfo = await Promise.all(
             routeIds.map(async (routeId) => {
-              const updatedRouteId = `8-${routeId.split("-")[1]}`;
-              const lineGeometry = await prisma.lineGeometry.findFirst({
-                where: { routeId: updatedRouteId },
-                select: { lineType: true },
-              });
-
-              const route = await prisma.route.findUnique({
-                where: { id: routeId },
-                select: {
-                  shortName: true,
-                  longName: true,
-                  type: true,
-                  color: true,
-                  textColor: true,
-                },
-              });
+              const routeNumber = extractRouteNumber(routeId);
+              const candidateIds = [...new Set([routeId, routeNumber, `7-${routeNumber}`, `8-${routeNumber}`])];
+              const [geometries, routes] = await Promise.all([
+                prisma.lineGeometry.findMany({
+                  where: { routeId: { in: candidateIds } },
+                  select: { routeId: true, lineType: true },
+                }),
+                prisma.route.findMany({
+                  where: { id: { in: candidateIds } },
+                  select: {
+                    id: true,
+                    shortName: true,
+                    longName: true,
+                    type: true,
+                    color: true,
+                    textColor: true,
+                  },
+                }),
+              ]);
+              const lineGeometry = candidateIds
+                .map((id) => geometries.find((geometry) => geometry.routeId === id))
+                .find(Boolean);
+              const route = candidateIds
+                .map((id) => routes.find((candidate) => candidate.id === id))
+                .find(Boolean);
 
               return {
                 routeId,

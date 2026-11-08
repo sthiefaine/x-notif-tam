@@ -4,6 +4,8 @@ npm-debug.log
 .gitignore
 README.md
 .env
+.env*
+.x-browser
 .env.local
 .env.development.local
 .env.test.local
@@ -18,4 +20,4 @@ coverage
 .idea
 *.swp
 *.swo
-*~ 
+*~
