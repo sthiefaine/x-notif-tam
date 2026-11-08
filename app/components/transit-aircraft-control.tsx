@@ -4,15 +4,15 @@ import { useEffect, useMemo, useState } from "react";
 import type { AircraftSnapshot, LiveHelicopter } from "@/lib/aircraft/types";
 import { Icon } from "./transit-icons";
 
-export default function TransitAircraftControl({ now, onChange, selectedId, onSelect }: {
-  now: number; onChange: (aircraft: LiveHelicopter[]) => void; selectedId: string | null; onSelect: (id: string | null) => void;
+export default function TransitAircraftControl({ now, onChange, selectedId, onSelect, paused = false }: {
+  now: number; onChange: (aircraft: LiveHelicopter[]) => void; selectedId: string | null; onSelect: (id: string | null) => void; paused?: boolean;
 }) {
   const [snapshot, setSnapshot] = useState<AircraftSnapshot | null>(null);
   const [failed, setFailed] = useState(false);
   const [enabled, setEnabled] = useState(true);
   const [open, setOpen] = useState(false);
   useEffect(() => {
-    if (!enabled) return;
+    if (!enabled || paused) return;
     let disposed = false;
     let timer: ReturnType<typeof setTimeout>;
     let controller: AbortController;
@@ -30,7 +30,7 @@ export default function TransitAircraftControl({ now, onChange, selectedId, onSe
     };
     void load();
     return () => { disposed = true; controller?.abort(); clearTimeout(timer); };
-  }, [enabled]);
+  }, [enabled, paused]);
   const fresh = useMemo(() => enabled ? (snapshot?.aircraft || []).filter((item) => item.freshness === "fresh" && now - Date.parse(item.timestamp) <= 60_000 && now - Date.parse(item.timestamp) >= -30_000) : [], [enabled, snapshot, now]);
   useEffect(() => { onChange(fresh); }, [fresh, onChange]);
   const selected = fresh.find((item) => item.id === selectedId);

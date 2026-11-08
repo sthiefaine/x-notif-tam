@@ -22,13 +22,15 @@ export default function TransitStopDetail({ network, stop, routeId, arrivals, ve
     && arrival.freshness === "fresh" && observedAge(arrival.timestamp, now) <= 90
     && Date.parse(arrival.departureTime || arrival.arrivalTime || "") >= now - 30_000)
     .sort((a, b) => Date.parse(a.departureTime || a.arrivalTime || "") - Date.parse(b.departureTime || b.arrivalTime || "")).slice(0, 6);
-  const diagramRoute = routes.find((route) => route.id === routeId) || routes.find((route) => route.id === next[0]?.routeId) || routes[0];
+  // A prediction appearing or expiring must not switch the traveller's diagram.
+  const [diagramRouteId, setDiagramRouteId] = useState(() => routeId || next[0]?.routeId || routes[0]?.id);
+  const diagramRoute = routes.find((route) => route.id === routeId) || routes.find((route) => route.id === diagramRouteId) || routes[0];
 
   return <>
     <div className="stop-detail-heading">{onBack ? <button type="button" className="stop-back icon-button" onClick={onBack} aria-label={backLabel} title={backLabel}><Icon name="arrow" size={21} /></button> : <span className="stop-location-icon"><Icon name="locate" size={21} /></span>}<div><h2>{stop.name}</h2><small className="stop-reference">Quai {stopReference(stop)}</small></div></div>
     <div className="stop-line-picker" aria-label="Lignes à cet arrêt">
       {routes.length > 1 ? <button type="button" aria-pressed={!routeId} onClick={() => { onRouteChange(null); setShowAll(false); }}>Toutes</button> : null}
-      {routes.map((route) => <button type="button" key={route.id} aria-pressed={routeId === route.id || routes.length === 1} aria-label={`Passages et parcours de la ligne ${route.shortName}`} onClick={() => { onRouteChange(route.id); setShowAll(false); }}><RouteBadge route={route} small /></button>)}
+      {routes.map((route) => <button type="button" key={route.id} aria-pressed={routeId === route.id || routes.length === 1} aria-label={`Passages et parcours de la ligne ${route.shortName}`} onClick={() => { setDiagramRouteId(route.id); onRouteChange(route.id); setShowAll(false); }}><RouteBadge route={route} small /></button>)}
     </div>
     {impacts.map((impact) => <div key={impact.alertId} className={`stop-service-notice${impact.temporalStatus === "active" ? " active" : ""}`}><span aria-hidden="true">×</span><p><strong>{impact.routeIds.length ? `Ligne ${impact.routeIds.map((id) => routes.find((route) => route.id === id)?.shortName || id).join(", ")} · ` : ""}Non desservi{impact.temporalStatus === "upcoming" ? " prévu" : ""}</strong><small>{impact.temporalStatus === "upcoming" && impact.nextPeriod?.start ? new Intl.DateTimeFormat("fr-FR", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", timeZone: "Europe/Paris" }).format(new Date(impact.nextPeriod.start)) : impact.temporalStatus === "active" ? "En cours" : "Dates à confirmer"}</small></p></div>)}
     <div className="panel-section-heading stop-arrival-heading"><h3>Prochains passages</h3>{next.length ? <span className="arrival-live"><span />En direct</span> : null}</div>
