@@ -8,7 +8,7 @@ L'accueil de [x-notif-tam.clairdev.com](https://x-notif-tam.clairdev.com/) affic
 - Positions, prévisions et alertes : un collecteur partagé par processus, toutes les trente secondes, état en mémoire borné. Une date de mesure de plus de 90 secondes est périmée ; une position disparaît du direct après 180 secondes.
 - Couleur officielle des lignes conservée ; hachures jaunes seulement sur une portion concernée suffisamment localisée, coupure rouge pour une interruption officielle, halo lavande pour un arrêt prolongé estimé. L'itinéraire réel d'une déviation n'est pas inventé.
 - Le signal lavande utilise des mesures fraîches, un arrêt et une course connus, les horaires et plusieurs observations ; terminus, pauses prévues et pertes GPS ne sont pas qualifiés d'anormaux. La cause reste inconnue.
-- Fond clair OpenFreeMap configurable, attribution visible, liste équivalente lorsque WebGL est indisponible, favoris locaux et géolocalisation volontaire.
+- Fond clair OpenFreeMap configurable, crédits repliés accessibles par le bouton (i), liste équivalente lorsque WebGL est indisponible, favoris locaux et géolocalisation volontaire.
 
 ## Fréquences de passage et affichage voyageurs
 
@@ -21,6 +21,14 @@ La carte donne la priorité visuelle aux trams à faible zoom. Les lignes sélec
 Les alertes utilisent l’identifiant commercial lorsque le texte officiel et le référentiel permettent de résoudre un selector interne inconnu (par exemple 61 → A). Le selector brut est conservé. Les marqueurs distinguent un arrêt concerné d’un simple repère de ligne, qui ne localise pas l’incident.
 
 Une tentative X dont l’envoi n’a pas été confirmé reste en quarantaine. L’API protégée `/api/post_tweets?dryRun=true` expose les alertes en attente et leur état, sans les republier ; les alertes déjà en quarantaine ne sont jamais libérées par une mise à jour du code ou un changement de libellé.
+
+## Arrêts, perturbations et aéronefs
+
+Un clic sur un arrêt présente les trois prochains départs, les suivants au dépliage, puis le parcours centré sur ce quai. Les pastilles de ligne filtrent les départs sans quitter l’arrêt. Carte et schéma partagent les petits marqueurs de véhicule et leur flèche ; une direction absente ne devient pas artificiellement un cap nord. Le panneau Trafic distingue les alertes officielles des observations « Arrêts prolongés » en lavande.
+
+Les non-dessertes sont issues des sélecteurs officiels ou d’une phrase explicite identifiant des arrêts. Une plage entre deux noms n’est étendue que si un seul parcours GTFS la rend non ambiguë. Les arrêts de report et les quais opposés ne sont pas inclus ; la restriction conserve sa ligne et son sens. Les périodes officielles déterminent le jaune « prévu » puis le rouge « en cours », avec expiration automatique côté client. Un retard, une annulation de course ou une simple déviation ne ferme jamais tous les arrêts. Aucune géométrie de déviation n’est inventée.
+
+La couche hélicoptères utilise `GET /api/live/aircraft`, alimenté par [adsb.lol](https://www.adsb.lol/docs/open-data/api), sous [ODbL 1.0](https://opendatacommons.org/licenses/odbl/1-0/). Zone fixe de 20 km autour de Montpellier ; seules les catégories ADS-B A7 explicitement reçues en vol, avec altitude barométrique positive et position récente, sont affichées. L’altitude n’est pas une hauteur au-dessus du terrain. Le cache partagé limite les requêtes à une par minute et par processus, à la demande ; délai de 8 s, repli et temporisation en cas d’échec. La carte masque les positions de plus de 60 s, sans stockage de vols en base. La couverture est partielle : aucun signal reçu ne prouve pas l’absence d’hélicoptères. Le fournisseur est gratuit au mieux de ses capacités et peut faire évoluer ses limites ; pour une audience soutenue, prendre contact selon sa documentation.
 
 ## Conservation et bilans
 

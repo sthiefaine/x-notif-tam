@@ -1,6 +1,6 @@
 import type { CSSProperties } from "react";
 
-export type IconName = "search" | "tram" | "bus" | "map" | "list" | "arrow" | "chevron" | "locate" | "star" | "clock" | "alert" | "info" | "close" | "pause" | "play" | "refresh" | "external" | "stats" | "check" | "signal";
+export type IconName = "search" | "tram" | "bus" | "map" | "list" | "arrow" | "chevron" | "locate" | "star" | "clock" | "alert" | "info" | "close" | "pause" | "play" | "refresh" | "external" | "stats" | "check" | "signal" | "helicopter";
 
 const paths: Record<IconName, string[]> = {
   search: ["M21 21l-4.5-4.5", "M19 10.5a8.5 8.5 0 1 1-17 0 8.5 8.5 0 0 1 17 0Z"],
@@ -23,6 +23,7 @@ const paths: Record<IconName, string[]> = {
   stats: ["M4 20V10M12 20V4M20 20v-7"],
   check: ["m5 12 4 4L20 5"],
   signal: ["M5 20v-3M10 20v-7M15 20V8M20 20V3"],
+  helicopter: ["M3 4h15M11 4v4M8 8h7a5 5 0 0 1 5 5v2H8a3 3 0 0 1-3-3V9L2 7v6h3M14 8v5h6M8 15v4m8-4v4M6 19h14"],
 };
 
 export function Icon({ name, size = 20, className, style }: { name: IconName; size?: number; className?: string; style?: CSSProperties }) {

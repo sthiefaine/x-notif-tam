@@ -4,14 +4,20 @@ import { useEffect, useRef, useState } from "react";
 import * as maplibregl from "maplibre-gl";
 import type { GeoJSONSource, Map as LibreMap } from "maplibre-gl";
 import type { FeatureCollection } from "geojson";
+import type { LiveHelicopter } from "@/lib/aircraft/types";
 import type { LiveAlert, LiveArrival, LiveVehicle } from "@/lib/transit/live-types";
 import type { TransitNetwork, TransitStop } from "@/lib/transit/types";
 import { affectedLineFeatures, freshVehicle, isTram, longStop, safeColor, vehicleAge } from "./transit-state";
 import { describeVehicle, nextTripDelays } from "./transit-vehicle-state";
+import { VEHICLE_MARKER, vehicleBearing } from "./transit-vehicle-marker";
+import { stopServiceImpacts } from "@/lib/transit/alert-impacts";
 import "maplibre-gl/dist/maplibre-gl.css";
 
 type Props = {
   network: TransitNetwork | null;
+  aircraft: LiveHelicopter[];
+  selectedAircraftId: string | null;
+  onAircraftSelect: (id: string) => void;
   vehicles: LiveVehicle[];
   arrivals: LiveArrival[];
   importantRouteIds: string[];
@@ -50,7 +56,7 @@ function boundsFor(network: TransitNetwork, routeId: string | null) {
 }
 
 function addLayers(map: LibreMap) {
-  for (const id of ["tam-lines", "tam-stops", "tam-vehicles", "tam-affected", "tam-location", "tam-alerts"]) map.addSource(id, { type: "geojson", data: empty });
+  for (const id of ["tam-lines", "tam-stops", "tam-stop-impacts", "tam-vehicles", "tam-affected", "tam-location", "tam-alerts", "tam-aircraft"]) map.addSource(id, { type: "geojson", data: empty });
   const canvas = document.createElement("canvas");
   canvas.width = 16;
   canvas.height = 16;
@@ -78,9 +84,22 @@ function addLayers(map: LibreMap) {
   map.addLayer({ id: "tam-stop-hit", type: "circle", source: "tam-stops", minzoom: 12, paint: { "circle-radius": 12, "circle-opacity": 0 } });
   map.addLayer({ id: "tam-stop-selected", type: "circle", source: "tam-stops", filter: ["==", ["get", "id"], ""], paint: { "circle-radius": 9, "circle-color": "#ffffff", "circle-stroke-color": "#153768", "circle-stroke-width": 3 } });
   map.addLayer({ id: "tam-stop-label", type: "symbol", source: "tam-stops", minzoom: 15, layout: { "text-field": ["get", "name"], "text-font": ["Noto Sans Regular"], "text-size": 11, "text-offset": [0, 1.1], "text-anchor": "top", "text-max-width": 12 }, paint: { "text-color": "#33445a", "text-halo-color": "#ffffff", "text-halo-width": 2 } });
-  map.addLayer({ id: "tam-long-stop", type: "circle", source: "tam-vehicles", filter: ["==", ["get", "attention"], true], paint: { "circle-radius": 17, "circle-color": ["get", "stateColor"], "circle-opacity": 0.2, "circle-stroke-color": ["get", "stateColor"], "circle-stroke-width": 2 } });
-  map.addLayer({ id: "tam-vehicle-circles", type: "circle", source: "tam-vehicles", paint: { "circle-radius": ["case", ["==", ["get", "selected"], true], 11, 8.5], "circle-color": ["case", ["==", ["get", "fresh"], true], ["get", "color"], "#8793a2"], "circle-stroke-width": 2.5, "circle-stroke-color": "#ffffff", "circle-opacity": ["case", ["==", ["get", "fresh"], true], 1, 0.7] } });
-  map.addLayer({ id: "tam-vehicle-direction", type: "symbol", source: "tam-vehicles", layout: { "text-field": ["case", ["==", ["get", "state"], "at_stop"], "●", "▲"], "text-font": ["Noto Sans Regular"], "text-size": 11, "text-rotate": ["coalesce", ["get", "bearing"], 0], "text-rotation-alignment": "map", "text-allow-overlap": true, "text-ignore-placement": true }, paint: { "text-color": ["get", "textColor"] } });
+  map.addLayer({ id: "tam-stop-impact-circles", type: "circle", source: "tam-stop-impacts", paint: { "circle-radius": 7, "circle-color": "#ffffff", "circle-stroke-color": ["get", "color"], "circle-stroke-width": 2 } });
+  map.addLayer({ id: "tam-stop-impact-symbols", type: "symbol", source: "tam-stop-impacts", layout: { "text-field": "×", "text-font": ["Noto Sans Bold"], "text-size": 15, "text-allow-overlap": true, "text-ignore-placement": true }, paint: { "text-color": ["get", "color"] } });
+  map.addLayer({ id: "tam-stop-impact-hit", type: "circle", source: "tam-stop-impacts", paint: { "circle-radius": 18, "circle-opacity": 0 } });
+  for (const arrow of [true, false]) {
+    const glyph = document.createElement("canvas");
+    glyph.width = glyph.height = VEHICLE_MARKER.size * 2;
+    const pen = glyph.getContext("2d");
+    if (!pen) continue;
+    pen.scale(2, 2); pen.fillStyle = "#fff";
+    if (arrow) pen.fill(new Path2D(VEHICLE_MARKER.arrow));
+    else { pen.beginPath(); pen.arc(12, 12, 1.4, 0, Math.PI * 2); pen.fill(); }
+    map.addImage(arrow ? "tam-bearing" : "tam-stationary", pen.getImageData(0, 0, glyph.width, glyph.height), { pixelRatio: 2, sdf: true });
+  }
+  map.addLayer({ id: "tam-long-stop", type: "circle", source: "tam-vehicles", filter: ["==", ["get", "attention"], true], paint: { "circle-radius": VEHICLE_MARKER.haloRadius, "circle-color": ["get", "stateColor"], "circle-opacity": 0.2, "circle-stroke-color": ["get", "stateColor"], "circle-stroke-width": 1.5 } });
+  map.addLayer({ id: "tam-vehicle-circles", type: "circle", source: "tam-vehicles", paint: { "circle-radius": ["case", ["==", ["get", "selected"], true], VEHICLE_MARKER.selectedRadius, VEHICLE_MARKER.radius], "circle-color": ["case", ["==", ["get", "fresh"], true], ["get", "color"], VEHICLE_MARKER.stale], "circle-stroke-width": VEHICLE_MARKER.stroke, "circle-stroke-color": "#ffffff", "circle-opacity": ["case", ["==", ["get", "fresh"], true], 1, 0.7] } });
+  map.addLayer({ id: "tam-vehicle-direction", type: "symbol", source: "tam-vehicles", layout: { "icon-image": ["case", ["any", ["==", ["get", "state"], "at_stop"], ["!", ["get", "hasBearing"]]], "tam-stationary", "tam-bearing"], "icon-rotate": ["get", "bearing"], "icon-rotation-alignment": "map", "icon-allow-overlap": true, "icon-ignore-placement": true }, paint: { "icon-color": ["get", "textColor"], "icon-opacity": ["case", ["get", "fresh"], 1, 0.7] } });
   map.addLayer({ id: "tam-vehicle-hit", type: "circle", source: "tam-vehicles", paint: { "circle-radius": 16, "circle-opacity": 0 } });
   map.addLayer({ id: "tam-alert-halo", type: "circle", source: "tam-alerts", paint: { "circle-radius": 16, "circle-color": ["get", "color"], "circle-stroke-color": "#ffffff", "circle-stroke-width": 3 } });
   map.addLayer({ id: "tam-alert-symbol", type: "symbol", source: "tam-alerts", layout: { "text-field": "!", "text-font": ["Noto Sans Bold"], "text-size": 21, "text-allow-overlap": true, "text-ignore-placement": true }, paint: { "text-color": "#ffffff" } });
@@ -88,6 +107,18 @@ function addLayers(map: LibreMap) {
   map.addLayer({ id: "tam-alert-hit", type: "circle", source: "tam-alerts", paint: { "circle-radius": 23, "circle-opacity": 0 } });
   map.addLayer({ id: "tam-location-halo", type: "circle", source: "tam-location", paint: { "circle-radius": 15, "circle-color": "#2458bd", "circle-opacity": 0.12 } });
   map.addLayer({ id: "tam-location-dot", type: "circle", source: "tam-location", paint: { "circle-radius": 6, "circle-color": "#2458bd", "circle-stroke-color": "#ffffff", "circle-stroke-width": 2 } });
+  const helicopter = document.createElement("canvas");
+  helicopter.width = helicopter.height = 60;
+  const rotor = helicopter.getContext("2d");
+  if (rotor) {
+    rotor.scale(2, 2); rotor.fillStyle = rotor.strokeStyle = "#fff";
+    rotor.lineWidth = 2; rotor.lineCap = "round";
+    rotor.fill(new Path2D("M15 6C11 6 11 17 15 18C19 17 19 6 15 6Z"));
+    rotor.stroke(new Path2D("M4 12H26M15 18V26M11 25H19M9 6L21 20M7 19L23 5"));
+    map.addImage("tam-helicopter", rotor.getImageData(0, 0, 60, 60), { pixelRatio: 2, sdf: true });
+    map.addLayer({ id: "tam-aircraft-icons", type: "symbol", source: "tam-aircraft", layout: { "icon-image": "tam-helicopter", "icon-rotate": ["get", "bearing"], "icon-rotation-alignment": "map", "icon-allow-overlap": true, "icon-ignore-placement": true }, paint: { "icon-color": "#147a8a", "icon-halo-color": "#fff", "icon-halo-width": 1.5 } });
+    map.addLayer({ id: "tam-aircraft-hit", type: "circle", source: "tam-aircraft", paint: { "circle-radius": 22, "circle-opacity": 0 } });
+  }
 }
 
 export default function TransitMap(props: Props) {
@@ -122,12 +153,18 @@ export default function TransitMap(props: Props) {
         map = new maplibregl.Map({
           container: container.current, style: styleUrl, center: [3.879, 43.6119], zoom: 11.4,
           maxZoom: 18, minZoom: 8, attributionControl: false, cooperativeGestures: false, maxPitch: 0,
-          locale: { "NavigationControl.ZoomIn": "Zoomer", "NavigationControl.ZoomOut": "Dézoomer" },
+          locale: { "NavigationControl.ZoomIn": "Zoomer", "NavigationControl.ZoomOut": "Dézoomer", "AttributionControl.ToggleAttribution": "Crédits de la carte" },
         });
         mapRef.current = map;
         if (typeof ResizeObserver !== "undefined") { resizeObserver = new ResizeObserver(() => { map?.resize(); detailRef.current?.(); }); resizeObserver.observe(container.current); }
         map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "top-right");
-        map.addControl(new maplibregl.AttributionControl({ compact: true, customAttribution: 'Fond : <a href="https://openfreemap.org/" target="_blank" rel="noopener noreferrer">OpenFreeMap</a> · <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">© OpenStreetMap</a> · <a href="https://openmaptiles.org/" target="_blank" rel="noopener noreferrer">OpenMapTiles</a>' }), "bottom-right");
+        map.addControl(new maplibregl.AttributionControl({ compact: true }), "bottom-right");
+        map.once("load", () => {
+          // MapLibre 6 initially opens compact credits. Keep them one tap away.
+          const credits = map?.getContainer().querySelector(".maplibregl-ctrl-attrib");
+          credits?.classList.remove("maplibregl-compact-show");
+          credits?.removeAttribute("open");
+        });
         map.on("style.load", () => {
           if (disposed || !map) return;
           addLayers(map);
@@ -146,14 +183,16 @@ export default function TransitMap(props: Props) {
           setReady(true);
           setMapMessage(null);
           for (const layer of ["tam-bus-hit", "tam-tram-hit"]) map.on("click", layer, (event) => {
-            if (map?.queryRenderedFeatures(event.point, { layers: ["tam-stop-hit", "tam-vehicle-hit", "tam-alert-hit"] }).length) return;
+            if (map?.queryRenderedFeatures(event.point, { layers: ["tam-stop-hit", "tam-stop-impact-hit", "tam-vehicle-hit", "tam-alert-hit", "tam-aircraft-hit"] }).length) return;
             const id = event.features?.[0]?.properties.routeId;
             if (id) callbacks.current.onRouteSelect(String(id));
           });
-          map.on("click", "tam-stop-hit", (event) => { if (map?.queryRenderedFeatures(event.point, { layers: ["tam-vehicle-hit", "tam-alert-hit"] }).length) return; const id = event.features?.[0]?.properties.id; if (id) callbacks.current.onStopSelect(String(id)); });
-          map.on("click", "tam-vehicle-hit", (event) => { const id = event.features?.[0]?.properties.id; if (id) callbacks.current.onVehicleSelect(String(id)); });
-          map.on("click", "tam-alert-hit", (event) => { const id = event.features?.[0]?.properties.alertId; if (id) callbacks.current.onAlertSelect(String(id)); });
-          for (const layer of ["tam-bus-hit", "tam-tram-hit", "tam-stop-hit", "tam-vehicle-hit", "tam-alert-hit"]) {
+          map.on("click", "tam-stop-hit", (event) => { if (map?.queryRenderedFeatures(event.point, { layers: ["tam-stop-impact-hit", "tam-vehicle-hit", "tam-alert-hit", "tam-aircraft-hit"] }).length) return; const id = event.features?.[0]?.properties.id; if (id) callbacks.current.onStopSelect(String(id)); });
+          map.on("click", "tam-vehicle-hit", (event) => { if (map?.queryRenderedFeatures(event.point, { layers: ["tam-aircraft-hit"] }).length) return; const id = event.features?.[0]?.properties.id; if (id) callbacks.current.onVehicleSelect(String(id)); });
+          map.on("click", "tam-alert-hit", (event) => { if (map?.queryRenderedFeatures(event.point, { layers: ["tam-aircraft-hit"] }).length) return; const id = event.features?.[0]?.properties.alertId; if (id) callbacks.current.onAlertSelect(String(id)); });
+          map.on("click", "tam-aircraft-hit", (event) => { const id = event.features?.[0]?.properties.id; if (id) callbacks.current.onAircraftSelect(String(id)); });
+          map.on("click", "tam-stop-impact-hit", (event) => { if (map?.queryRenderedFeatures(event.point, { layers: ["tam-vehicle-hit", "tam-alert-hit", "tam-aircraft-hit"] }).length) return; const id = event.features?.[0]?.properties.id; if (id) callbacks.current.onStopSelect(String(id)); });
+          for (const layer of ["tam-bus-hit", "tam-tram-hit", "tam-stop-hit", "tam-stop-impact-hit", "tam-vehicle-hit", "tam-alert-hit", "tam-aircraft-hit"]) {
             map.on("mouseenter", layer, () => { if (map) map.getCanvas().style.cursor = "pointer"; });
             map.on("mouseleave", layer, () => { if (map) map.getCanvas().style.cursor = ""; });
           }
@@ -222,7 +261,7 @@ export default function TransitMap(props: Props) {
     source(map, "tam-vehicles")?.setData({ type: "FeatureCollection", features: props.vehicles.map((vehicle) => {
       const route = routeMap.get(vehicle.routeId);
       const state = describeVehicle(vehicle, props.now, vehicle.stopId ? stops.get(vehicle.stopId) : undefined, vehicle.tripId ? delays.get(vehicle.tripId) : undefined);
-      return { type: "Feature", id: vehicle.id, properties: { id: vehicle.id, isTram: Boolean(route && isTram(route)), important: important.has(vehicle.routeId) || route?.shortName === "A" || state.attention || vehicle.id === props.selectedVehicleId, state: state.kind, stateColor: state.color, attention: state.attention, color: safeColor(route?.color), textColor: safeColor(route?.textColor, "#ffffff"), bearing: vehicle.bearing ?? 0, fresh: freshVehicle(vehicle, props.now), longStop: longStop(vehicle, props.now), selected: vehicle.id === props.selectedVehicleId, age: vehicleAge(vehicle, props.now) }, geometry: { type: "Point", coordinates: [vehicle.lon, vehicle.lat] } };
+      return { type: "Feature", id: vehicle.id, properties: { id: vehicle.id, isTram: Boolean(route && isTram(route)), important: important.has(vehicle.routeId) || route?.shortName === "A" || state.attention || vehicle.id === props.selectedVehicleId, state: state.kind, stateColor: state.color, attention: state.attention, color: safeColor(route?.color), textColor: safeColor(route?.textColor, "#ffffff"), bearing: vehicleBearing(vehicle.bearing) ?? 0, hasBearing: vehicleBearing(vehicle.bearing) !== null, fresh: freshVehicle(vehicle, props.now), longStop: longStop(vehicle, props.now), selected: vehicle.id === props.selectedVehicleId, age: vehicleAge(vehicle, props.now) }, geometry: { type: "Point", coordinates: [vehicle.lon, vehicle.lat] } };
     }) });
   }, [ready, props.network, props.vehicles, props.arrivals, props.importantRouteIds, props.now, props.selectedVehicleId]);
 
@@ -256,6 +295,27 @@ export default function TransitMap(props: Props) {
     const vehicle = callbacks.current.vehicles.find((entry) => entry.id === props.selectedVehicleId);
     if (ready && map && vehicle) map.easeTo({ center: [vehicle.lon, vehicle.lat], zoom: Math.max(map.getZoom(), 14), duration: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : 500 });
   }, [ready, props.selectedVehicleId]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!ready || !map || !props.network) return;
+    source(map, "tam-stop-impacts")?.setData({ type: "FeatureCollection", features: props.network.stops.flatMap((stop) => {
+      const impact = stopServiceImpacts(props.alerts, stop.id, props.selectedRouteId, props.now, props.direction).find((item) => item.serviceStatus === "not_served" && item.temporalStatus !== "unknown");
+      return impact ? [{ type: "Feature" as const, properties: { id: stop.id, color: impact.temporalStatus === "upcoming" ? "#be8a16" : "#c24b59" }, geometry: { type: "Point" as const, coordinates: [stop.lon, stop.lat] } }] : [];
+    }) });
+  }, [ready, props.network, props.alerts, props.selectedRouteId, props.direction, props.now]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!ready || !map) return;
+    source(map, "tam-aircraft")?.setData({ type: "FeatureCollection", features: props.aircraft.map((item) => ({ type: "Feature", properties: { id: item.id, bearing: vehicleBearing(item.bearing) ?? 0 }, geometry: { type: "Point", coordinates: [item.lon, item.lat] } })) });
+  }, [ready, props.aircraft]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    const item = callbacks.current.aircraft.find((entry) => entry.id === props.selectedAircraftId);
+    if (ready && map && item) map.easeTo({ center: [item.lon, item.lat], zoom: Math.max(map.getZoom(), 12), duration: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : 500 });
+  }, [ready, props.selectedAircraftId]);
 
   return <><div ref={container} className="transit-map-canvas" data-map-state={ready ? "ready" : "loading"} />{!ready && !mapMessage ? <div className="map-loading" role="status"><span className="loader" />Chargement du fond de carte…</div> : null}{mapMessage ? <div className="map-source-warning" role="status">{mapMessage}</div> : null}</>;
 }

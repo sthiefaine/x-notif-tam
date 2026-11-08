@@ -3,6 +3,8 @@ import type { LiveAlert } from "./live-types";
 import type { RealtimeFeed } from "./realtime";
 import { unixMilliseconds } from "./realtime";
 import { distanceMetres } from "./dwell";
+import { alertTiming, deriveStopImpacts } from "./alert-impacts";
+export { alertTiming, stopImpactForRoute, stopServiceImpacts } from "./alert-impacts";
 
 const causes: Record<number, string> = { 1: "UNKNOWN_CAUSE", 2: "OTHER_CAUSE", 3: "TECHNICAL_PROBLEM", 4: "STRIKE", 5: "DEMONSTRATION", 6: "ACCIDENT", 7: "HOLIDAY", 8: "WEATHER", 9: "MAINTENANCE", 10: "CONSTRUCTION", 11: "POLICE_ACTIVITY", 12: "MEDICAL_EMERGENCY" };
 const effects: Record<number, string> = { 1: "NO_SERVICE", 2: "REDUCED_SERVICE", 3: "SIGNIFICANT_DELAYS", 4: "DETOUR", 5: "ADDITIONAL_SERVICE", 6: "MODIFIED_SERVICE", 7: "OTHER_EFFECT", 8: "UNKNOWN_EFFECT", 9: "STOP_MOVED", 10: "NO_EFFECT", 11: "ACCESSIBILITY_ISSUE" };
@@ -109,11 +111,18 @@ export function normalizeAlerts(feed: RealtimeFeed, network: TransitNetwork, loo
     const producerWorks = ["CONSTRUCTION", "MAINTENANCE"].includes(cause);
     const keywordWorks = !producerWorks && /\btravaux\b|chantier|construction|roadworks/i.test(`${header} ${description}`);
     const geometry = routeIds.length === 1 ? segmentGeometry(routeIds[0], stopIds, `${header} ${description}`, network, lookup) : undefined;
+    const periods = (raw.activePeriod ?? []).slice(0, 100).map((period) => {
+      const start = unixMilliseconds(period.start), end = unixMilliseconds(period.end);
+      return { start: start === null ? null : new Date(start).toISOString(), end: end === null ? null : new Date(end).toISOString() };
+    });
+    const timingUncertain = (raw.activePeriod ?? []).length > 100 || (raw.activePeriod ?? []).some((period) =>
+      (period.start !== undefined && unixMilliseconds(period.start) === null) || (period.end !== undefined && unixMilliseconds(period.end) === null)
+      || (period.start !== undefined && period.end !== undefined && Number(period.start) >= Number(period.end)));
+    const stopImpacts = deriveStopImpacts((raw.informedEntity ?? []).map((selector) => ({ ...selector,
+      ...(selector.routeId && rawRouteIds.length === 1 ? { routeId: routeIds[0] } : {}) })),
+    routeIds, effect, `${header}\n${description}`, network, lookup);
     alerts.push({ id: entity.id, routeIds, rawRouteIds, routeAssociation, stopIds, header, description,
-      periods: (raw.activePeriod ?? []).slice(0, 100).map((period) => {
-        const start = unixMilliseconds(period.start), end = unixMilliseconds(period.end);
-        return { start: start === null ? null : new Date(start).toISOString(), end: end === null ? null : new Date(end).toISOString() };
-      }),
+      periods, ...(timingUncertain ? { timingUncertain } : {}), stopImpacts,
       cause, effect,
       scope: geometry ? "segment" : stopIds.length ? "stops" : routeIds.length ? "line" : "network",
       confidence: keywordWorks || geometry ? "estimated" : "official",
@@ -126,5 +135,5 @@ export function normalizeAlerts(feed: RealtimeFeed, network: TransitNetwork, loo
   return alerts;
 }
 export function isAlertActive(alert: LiveAlert, now: number): boolean {
-  return !alert.periods.length || alert.periods.some((period) => (!period.start || Date.parse(period.start) <= now) && (!period.end || now < Date.parse(period.end)));
+  return alertTiming(alert, now).temporalStatus === "active";
 }

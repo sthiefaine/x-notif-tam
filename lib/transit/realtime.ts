@@ -18,7 +18,7 @@ export interface RealtimeEntity {
     headerText?: { translation?: { text?: string; language?: string }[] };
     descriptionText?: { translation?: { text?: string; language?: string }[] };
     activePeriod?: { start?: number | string; end?: number | string }[];
-    informedEntity?: { routeId?: string; stopId?: string }[];
+    informedEntity?: { routeId?: string; stopId?: string; directionId?: number; routeType?: number; agencyId?: string; trip?: RealtimeTrip }[];
     cause?: string | number; effect?: string | number;
   };
 }

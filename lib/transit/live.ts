@@ -6,7 +6,7 @@ import type { TransitNetwork, TransitTripLookup } from "./types";
 import type { LiveSnapshot, LiveSourceName, LiveSourceQuality, LiveAlert, LiveArrival, LiveVehicle } from "./live-types";
 import { ageSeconds, FRESH_SECONDS, HIDE_SECONDS, normalizeArrivals, normalizeVehicles, unixMilliseconds,
   type ArrivalRecord, type RealtimeFeed, type VehicleRecord } from "./realtime";
-import { normalizeAlerts, isAlertActive } from "./live-alerts";
+import { normalizeAlerts, alertTiming } from "./live-alerts";
 import { DwellDetector } from "./dwell";
 import type { HeadwayFeed } from "./headways-detector";
 
@@ -316,7 +316,10 @@ export class LiveCollector {
       arrivals.push({ ...arrival, ageSeconds: age, freshness: age <= FRESH_SECONDS ? "fresh" : "stale" });
     }
     arrivals.sort((a, b) => (a.arrivalTime ?? a.departureTime ?? "").localeCompare(b.arrivalTime ?? b.departureTime ?? "") || a.id.localeCompare(b.id));
-    const alerts = [...this.alerts.values()].map((alert) => ({ ...alert, active: isAlertActive(alert, now) })).sort((a, b) => a.id.localeCompare(b.id));
+    const alerts = [...this.alerts.values()].map((alert) => {
+      const timing = alertTiming(alert, now);
+      return { ...alert, ...timing, active: timing.temporalStatus === "active" };
+    }).sort((a, b) => a.id.localeCompare(b.id));
     const sources = Object.fromEntries(SOURCE_NAMES.map((name) => {
       const quality = { ...this.sources[name] };
       const records = name === "vehicles" ? vehicles : name === "tripUpdates" ? arrivals : [];

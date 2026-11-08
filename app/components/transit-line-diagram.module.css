@@ -1,11 +1,11 @@
-.panel { border: 1px solid #e5e9ee; border-radius: 18px; background: #fff; padding: 18px 15px; margin: 18px 0; color: #233044; }
-.heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-.heading h3 { font-size: 17px; line-height: 1.35; margin: 4px 0 0; letter-spacing: -.35px; }
+.panel { border: 1px solid #e5e9ee; border-radius: 18px; background: #fff; padding: 14px 12px; margin: 14px 0; color: #233044; }
+.heading { display: flex; align-items: center; gap: 9px; }
+.heading h3 { font-size: 14px; line-height: 1.35; margin: 0; letter-spacing: -.35px; }
 .kicker { color: #728096; font-size: 9px; font-weight: 800; letter-spacing: 1.4px; }
-.lineBadge { min-width: 36px; height: 32px; padding: 0 8px; border-radius: 9px; background: var(--diagram-line, #475569); display: inline-flex; align-items: center; justify-content: center; font-size: 15px; font-weight: 800; }
+.lineBadge { min-width: 30px; height: 28px; padding: 0 8px; border-radius: 9px; background: var(--diagram-line, #475569); display: inline-flex; align-items: center; justify-content: center; font-size: 15px; font-weight: 800; }
 .explanation, .destination { color: #68758a; font-size: 11px; line-height: 1.65; margin: 12px 0; }
 .destination { color: #334155; font-weight: 700; }
-.variantPicker { display: grid; gap: 7px; margin-top: 15px; font-size: 11px; font-weight: 700; color: #6b7789; }
+.variantPicker { display: grid; gap: 7px; margin-top: 10px; font-size: 11px; font-weight: 700; color: #6b7789; }
 .variantPicker select { width: 100%; min-width: 0; font: inherit; color: #26344a; background: #f7f9fc; border: 1px solid #dce3ec; border-radius: 9px; padding: 10px 28px 10px 9px; }
 .lineAlerts { display: grid; gap: 8px; margin: 14px 0; }
 .lineAlerts > div { display: flex; gap: 10px; padding: 11px; border: 1px solid #f1dca9; background: #fffbef; border-radius: 11px; }
@@ -18,7 +18,7 @@
 .schematic { position: relative; }
 .track { position: absolute; left: 52px; width: 5px; border-radius: 8px; background: var(--diagram-line, #475569); opacity: .75; }
 .stations { list-style: none; padding: 0; margin: 0; }
-.stationRow { height: 72px; display: flex; align-items: center; margin: 0; }
+.stationRow { height: 60px; display: flex; align-items: center; margin: 0; }
 .stationButton { display: flex; align-items: center; gap: 11px; width: calc(100% - 40px); margin-left: 40px; padding: 8px 7px 8px 5px; text-align: left; color: inherit; border: 0; border-radius: 10px; background: transparent; cursor: pointer; min-width: 0; }
 .stationButton:hover { background: #f3f7fb; }
 .stationButton:focus-visible, .vehicle:focus-visible, .unplaced button:focus-visible, .variantPicker select:focus-visible { outline: 3px solid #4a82ba; outline-offset: 2px; }
@@ -31,24 +31,37 @@
 .stopAlert { font-size: 11px; width: 17px; height: 17px; }
 .arrival { font-size: 10px; color: #397461; white-space: nowrap; padding: 5px 7px; background: #edf7f1; border-radius: 6px; }
 .vehicleTrack { position: absolute; top: 0; left: 0; width: 39px; height: 100%; pointer-events: none; }
-.vehicle { position: absolute; transform: translateY(-50%); pointer-events: auto; min-width: 31px; height: 42px; padding: 3px 4px; display: grid; justify-items: center; gap: 0; border-radius: 9px; border: 1px solid var(--vehicle-state, #4c8094); background: #fff; color: var(--vehicle-state, #4c8094); box-shadow: 0 2px 7px #102a4318; cursor: pointer; z-index: 2; transition: top .5s ease; }
-.vehicle span { font-size: 8px; font-weight: 800; line-height: 1; letter-spacing: -.25px; }
-.moving { background: #f2f9ff; }
-.at_stop { background: #f0f8f2; }
-.delay { background: #fff7e8; border-width: 2px; }
-.prolonged { background: #f6efff; box-shadow: 0 0 0 5px #b9a2dd39; border-width: 2px; }
-.stale { background: #f3f4f6; border-style: dashed; color: #838995; filter: grayscale(1); }
-.unknown { background: #fff; border-style: dotted; }
+.vehicle { position: absolute; transform: translate(-50%, -50%); pointer-events: auto; width: 44px; height: 44px; padding: 10px; display: grid; place-items: center; border-radius: 50%; border: 0; background: transparent; cursor: pointer; z-index: 2; transition: top .5s ease; }
+.vehicle:hover { background: #2458bd0d; }
 .legend { border-top: 1px solid #eef1f5; padding-top: 12px; margin-top: 7px; display: flex; flex-wrap: wrap; gap: 9px 13px; font-size: 9px; color: #78859a; }
 .legend span { display: inline-flex; align-items: center; gap: 5px; }
-.legend i { display: inline-block; width: 8px; height: 8px; border-radius: 3px; }
+.legend i { display: inline-block; width: 8px; height: 8px; border-radius: 50%; }
 .legendVehicle { background: #4584a4; }
 .legendStale { background: #a3aab4; }
 .legendProlonged { background: #a78bce; }
 .unplaced { display: grid; gap: 5px; margin-top: 14px; padding-top: 10px; border-top: 1px solid #eef1f5; }
 .unplaced > strong { font-size: 10px; line-height: 1.5; color: #758298; margin-bottom: 3px; }
-.unplaced button { display: flex; justify-content: space-between; gap: 12px; text-align: left; border: 0; background: #f8fafc; padding: 8px; border-radius: 7px; cursor: pointer; font-size: 10px; color: #4d5d72; }
+.unplaced button { display: flex; gap: 9px; text-align: left; border: 0; background: #f8fafc; padding: 8px; border-radius: 7px; cursor: pointer; font-size: 10px; color: #4d5d72; }
 .unplaced button span { font-size: 9px; color: #7e8c9d; }
 .empty { padding: 11px 0 0; margin: 0; font-size: 11px; line-height: 1.7; color: #8490a0; }
 @media (max-width: 420px) { .panel { padding: 15px 11px; } .stationButton { gap: 8px; } .stationName strong { font-size: 11px; } .arrival { padding: 4px; font-size: 9px; } }
 @media (prefers-reduced-motion: reduce) { .vehicle { transition: none; } }
+
+.info { margin-left: auto; width: 22px; height: 22px; display: grid; place-items: center; border: 1px solid #d5dfe9; border-radius: 50%; font-size: 11px; color: #75879c; cursor: help; }
+.moreStops { display: block; width: 100%; min-height: 36px; padding: 7px 0 7px 40px; border: 0; background: transparent; text-align: left; color: #627a99; font: inherit; font-size: 11px; cursor: pointer; }
+.moreStops:hover { color: #2458bd; background: #f3f7fb; border-radius: 8px; }
+.selected .stationDot { background: var(--diagram-line); box-shadow: 0 0 0 4px #fff; }
+.selected .stationName small { color: #2458bd; font-weight: 700; }
+.closureNotice { width:100%; display:flex; align-items:center; gap:9px; padding:11px; margin-top:12px; background:#fff9e8; color:#9b721c; border:1px solid #ecd995; border-radius:11px; text-align:left; cursor:pointer; }
+.closureNotice>span:nth-child(2) { display:grid; gap:4px; flex:1; }
+.closureNotice>span:first-child { display:grid; place-items:center; width:23px; height:23px; border:2px solid currentColor; border-radius:50%; font-size:20px; font-weight:700; }
+.closureNotice strong { font-size:11px; }
+.closureNotice small { font-size:10px; }
+.closedNow { color:#b44957; border-color:#e8bdc4; background:#fff1f3; }
+.plannedClosure .stationDot,.activeClosure .stationDot { display:grid; place-items:center; font-weight:800; font-size:16px; line-height:1; border-width:2px; box-shadow:none; background:#fff; }
+.plannedClosure .stationDot { color:#be8a16; border-color:#be8a16; }
+.activeClosure .stationDot { color:#c24b59; border-color:#c24b59; }
+.plannedClosure .stationName small { color:#a27922; }
+.activeClosure .stationName small { color:#b44957; }
+.unplaced summary { min-height:36px; display:list-item; align-content:center; color:#758298; cursor:pointer; font-size:11px; }
+.unplaced button { min-height:44px; margin-top:5px; }

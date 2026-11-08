@@ -190,7 +190,8 @@ test("coverage is source availability, never an invented network service percent
 
 test("live collector sends headway evidence only from VP, including stale/error collection boundaries", async () => {
   const { network, lookup } = fixture(), batches = [];
-  const alerts = loadTypeScript("lib/transit/live-alerts.ts", { mocks: { "./realtime": realtime, "./dwell": dwell } });
+  const impacts = loadTypeScript("lib/transit/alert-impacts.ts");
+  const alerts = loadTypeScript("lib/transit/live-alerts.ts", { mocks: { "./realtime": realtime, "./dwell": dwell, "./alert-impacts": impacts } });
   const live = loadTypeScript("lib/transit/live.ts", { globals: { AbortController }, mocks: {
     protobufjs: {}, "./network": {}, "./realtime": realtime, "./dwell": dwell, "./live-alerts": alerts,
   } });

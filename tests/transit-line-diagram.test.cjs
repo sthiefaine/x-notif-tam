@@ -15,6 +15,8 @@ vm.runInNewContext(outputText, {
   module: moduleState, exports: moduleState.exports, Date, Map, Set,
   require: (name) => {
     if (name === "./transit-line-diagram.module.css") return { __esModule: true, default: new Proxy({}, { get: (_, key) => String(key) }) };
+    if (name === "@/lib/transit/alert-impacts") return require("./helpers/load-client-component.cjs").loadClientComponent("lib/transit/alert-impacts.ts");
+    if (name === "./transit-vehicle-marker") return require("./helpers/load-client-component.cjs").loadClientComponent("app/components/transit-vehicle-marker.tsx");
     if (name === "./transit-vehicle-state") return { nextTripDelays: () => new Map(), describeVehicle: (vehicle) => ({ kind: vehicle.freshness === "stale" ? "stale" : "unknown", label: "État observé", detail: "Source de test", color: "#777", attention: false }) };
     if (name === "react" || name === "react/jsx-runtime") return require(name);
     throw new Error(`Unexpected diagram import ${name}`);
@@ -56,8 +58,8 @@ test("renders stop order from the chosen GTFS pattern, preserving repeated stops
   const html = renderToStaticMarkup(React.createElement(Diagram, { network, route, vehicles: [], alerts: [], direction: 0, now }));
   assert.ok(html.indexOf(">Zebra<") < html.indexOf(">Alfa<"));
   assert.ok(html.indexOf(">Alfa<") < html.indexOf(">Milieu<"));
-  assert.ok(html.includes("Repère"));
-  assert.ok(html.includes("Cela ne signifie pas que la ligne ne circule pas"));
+  assert.ok(html.includes("repère z"));
+  assert.ok(html.includes("le service peut circuler"));
   const loop = { ...pattern, stopIds: ["z", "a", "z"], stopSequences: [1, 2, 3] };
   const htmlLoop = renderToStaticMarkup(React.createElement(Diagram, { network: { ...network, routePatterns: [loop] }, route, vehicles: [], alerts: [], now }));
   assert.ok(htmlLoop.includes("passage 1"));
@@ -81,10 +83,19 @@ test("no public pattern means no fabricated alphabetical stop sequence", () => {
 
 test("distant vehicles stay available in a separate list and old positions are omitted", () => {
   const html = renderToStaticMarkup(React.createElement(Diagram, { network, route, vehicles: [vehicle({ lon: 3.85 }), vehicle({ id: "obsolete", timestamp: new Date(now - 181_000).toISOString() })], alerts: [], now }));
-  assert.ok(html.includes("sans repère fiable"));
+  assert.ok(html.includes("véhicules hors schéma"));
   assert.ok(html.includes("Véhicule test-bus"));
   assert.ok(!html.includes("obsolete"));
   const unknown = renderToStaticMarkup(React.createElement(Diagram, { network, route, vehicles: [vehicle({ directionId: undefined })], alerts: [], now }));
-  assert.ok(unknown.includes("sans repère fiable"));
+  assert.ok(unknown.includes("véhicules hors schéma"));
   assert.ok(unknown.includes("Véhicule test-bus"));
+});
+
+test("an announced stop closure changes from planned to active and expires with its official period", () => {
+  const alert = { id: "closure", routeIds: ["A"], stopIds: [], periods: [{ start: new Date(now + 60000).toISOString(), end: new Date(now + 120000).toISOString() }], stopImpacts: [{ stopId: "a", routeIds: ["A"], directionId: 0, serviceStatus: "not_served", evidence: "explicit_range" }] };
+  const render = (at) => renderToStaticMarkup(React.createElement(Diagram, { network, route, vehicles: [], alerts: [alert], now: at }));
+  assert.ok(render(now).includes("plannedClosure"));
+  assert.ok(!render(now).includes('class="stationButton activeClosure"'));
+  assert.ok(render(now + 60000).includes("activeClosure"));
+  assert.ok(!render(now + 120000).includes("Non desservi"));
 });

@@ -30,9 +30,9 @@ button svg,a svg { flex:none; }
 .network-live-status.healthy { color:#40725c; background:#f0f8f4; border-color:#e0eee6; }
 .transit-workspace { display:flex; height:calc(100dvh - var(--header-height)); min-height:450px; overflow:hidden; }
 .transit-panel { flex:none; width:358px; background:white; display:flex; flex-direction:column; border-right:1px solid #dce3eb; position:relative; z-index:20; }
-.panel-intro { padding:26px 25px 19px; }
+.panel-intro { padding:20px 25px 14px; }
 .section-kicker { font-size:9px; font-weight:750; letter-spacing:1.55px; color:#8794a6; }
-.panel-intro h1 { font-size:32px; letter-spacing:-1.2px; font-weight:700; line-height:1.16; margin:12px 0 10px; }
+.panel-intro h1 { font-size:22px; letter-spacing:-.6px; font-weight:700; line-height:1.2; margin:0; }
 .panel-intro p { color:var(--muted); font-size:12px; line-height:1.7; margin:0; }
 .panel-search { display:flex; align-items:center; gap:10px; margin:0 23px; border:1px solid #dfe5ec; border-radius:9px; padding:0 5px 0 12px; height:45px; color:#7c8ba0; background:#fbfcfd; }
 .panel-search:focus-within { border-color:#8aabd9; background:#fff; }
@@ -415,3 +415,106 @@ button svg,a svg { flex:none; }
 @media (max-width:700px) { .transit-panel.has-selection .panel-search,.transit-panel.has-selection .mode-filters,.transit-panel.has-selection .route-full-name,.transit-panel.has-selection .direction-picker,.transit-panel.has-selection .line-observations { display:none; } .transit-panel.has-selection .route-detail-heading { margin-bottom:15px; } }
 
 .recent-alert-note { font-size:10px; line-height:1.6; color:#7b899a; margin:0 0 13px; }
+
+.stop-line-picker { display:flex; flex-wrap:wrap; align-items:center; gap:6px; margin:12px 0 2px; }
+.stop-line-picker button { display:grid; place-items:center; min-width:44px; min-height:44px; padding:5px; border:1px solid #e5ebf2; border-radius:11px; background:#fff; color:#65758a; font-size:11px; }
+.stop-line-picker button:first-child:not(:has(.route-badge)) { padding-inline:12px; }
+.stop-line-picker button[aria-pressed="true"] { background:#edf3ff; border-color:#88aae0; box-shadow:0 0 0 1px #88aae025; }
+.stop-arrival-heading { margin-top:17px; margin-bottom:9px; }
+.arrival-live { display:flex; align-items:center; gap:4px; color:#39826e!important; font-size:9px!important; }
+.arrival-live>span { width:5px; height:5px; background:#439d7b; border-radius:50%; }
+.stop-arrival-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:7px; }
+.stop-arrival-card { min-width:0; display:flex; flex-direction:column; align-items:flex-start; gap:8px; padding:11px 9px; background:#f5f8fc; border:1px solid #e7edf5; border-radius:12px; }
+.stop-arrival-card .route-badge { height:23px; min-width:25px; width:auto; padding-inline:5px; border-radius:6px; font-size:12px; }
+.stop-arrival-card>strong { font-size:23px; line-height:1.2; letter-spacing:-.7px; color:#204536; }
+.stop-arrival-card>strong:only-of-type { font-size:21px; }
+.stop-arrival-card strong small { font-size:11px; font-weight:500; letter-spacing:0; }
+.stop-arrival-card>span:last-child { width:100%; font-size:10px; color:#677a91; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.stop-more-arrivals { display:flex; align-items:center; justify-content:center; gap:5px; min-height:36px; width:100%; background:transparent; color:#55739b; font-size:11px; }
+.stop-no-arrivals { display:flex; gap:9px; align-items:flex-start; padding:12px; border-radius:10px; background:#f6f8fb; color:#75869a; }
+.stop-no-arrivals svg { flex-shrink:0; margin-top:1px; }
+.stop-no-arrivals p { margin:0; font-size:11px; }
+.stop-no-arrivals small { display:block; margin-top:4px; font-size:10px; line-height:1.5; }
+@media (min-width:701px) { .transit-panel.has-selection .mode-filters { display:none; } .transit-panel.has-selection .panel-search { margin-bottom:8px; } }
+
+/* Clear action surfaces; compact content, generous touch targets. */
+.mode-filters { gap:6px; }
+.mode-filters button { min-height:40px; border:1px solid #e3eaf3; background:#f8fafc; border-radius:10px; }
+.mode-filters button.selected { color:#fff; background:#2458bd; border-color:#2458bd; box-shadow:0 3px 8px #2458bd22; }
+.panel-tabs { gap:5px; padding:4px; border:1px solid #e5ebf3; background:#f3f6fa; border-radius:12px; }
+.panel-tabs button { justify-content:center; flex:1; min-height:42px; padding:8px 10px; border:1px solid transparent; border-radius:9px; color:#60728a; }
+.panel-tabs button:last-child { flex:0 0 44px; margin:0; padding:8px; }
+.panel-tabs button.selected { border-color:#cbdaf0; color:#2458bd; background:#fff; box-shadow:0 2px 5px #1029430a; }
+.icon-button { min-width:44px; min-height:44px; border-radius:10px; }
+.back-button { min-height:44px; padding:4px 9px; margin:0 0 12px; background:#eff4fc; border:1px solid #dce6f5; border-radius:10px; color:#42648f; width:fit-content; }
+.map-legend:not(.open) .legend-items { display:none; }
+.legend-heading { min-height:40px; cursor:pointer; }
+.map-legend:not(.open) { padding-bottom:0; }
+.map-locate-button { min-width:44px; min-height:44px; }
+.alert-shortcuts { display:grid; gap:7px; }
+.alert-shortcut { width:100%; min-height:58px; display:flex; align-items:center; gap:10px; padding:11px 12px; border-radius:12px; border:1px solid #edd88b; background:#fffae9; color:#956a16; text-align:left; }
+.alert-shortcut.interrupted { background:#fff0ef; color:#ac3f46; border-color:#efc3c7; }
+.alert-shortcut.information { background:#edf4ff; color:#345f99; border-color:#c9daf1; }
+.alert-shortcut>span { flex:1; display:grid; gap:3px; }
+.alert-shortcut strong { font-size:12px; }
+.alert-shortcut small { font-size:10px; opacity:.8; }
+@media (min-width:1550px) { .panel-intro { padding-bottom:14px; } }
+@media (min-width:701px) and (max-width:1090px) { .panel-intro h1 { font-size:22px; } }
+.stop-arrival-card>strong.imminent { font-size:14px; line-height:25px; letter-spacing:-.3px; }
+
+.map-legend:not(.open) { width:auto; padding:0 12px; }
+.aircraft-control { position:absolute; right:19px; bottom:180px; z-index:5; }
+.aircraft-toggle { position:relative; display:grid; place-items:center; width:44px; height:44px; background:#fff; border:1px solid #dfe5ec; border-radius:10px; color:#627e93; box-shadow:0 2px 9px #29486409; }
+.aircraft-toggle.detected { color:#147a8a; background:#e9f9fa; border-color:#93c9cf; }
+.aircraft-toggle>span { position:absolute; right:-4px; top:-5px; background:#147a8a; color:#fff; border:2px solid white; border-radius:12px; min-width:18px; font-size:10px; padding:1px 3px; }
+.aircraft-panel { position:absolute; bottom:0; right:54px; width:270px; padding:12px; background:#fffffff7; border:1px solid #d9e6eb; border-radius:15px; box-shadow:0 5px 30px #16364f15; }
+.aircraft-heading { display:flex; align-items:center; gap:7px; color:#226575; font-size:14px; }
+.aircraft-heading .icon-button { margin-left:auto; background:transparent; }
+.aircraft-switch { width:100%; display:flex; align-items:center; justify-content:space-between; gap:12px; min-height:44px; background:#f0f6f8; border-radius:9px; padding:8px 10px; color:#426576; font-size:11px; }
+.layer-switch { width:30px; height:18px; border-radius:12px; background:#cad5db; padding:3px; }
+.layer-switch:before { content:""; display:block; width:12px; height:12px; border-radius:50%; background:white; }
+.aircraft-switch[aria-pressed="true"] .layer-switch { background:#298493; }
+.aircraft-switch[aria-pressed="true"] .layer-switch:before { transform:translateX(12px); }
+.aircraft-empty { font-size:11px; color:#6c8393; line-height:1.6; padding:6px 2px; }
+.aircraft-panel footer { border-top:1px solid #e4edf0; padding-top:9px; margin-top:10px; color:#81929f; font-size:9px; }
+.aircraft-panel footer a { color:#387e8d; text-decoration:underline; }
+.aircraft-details { display:grid; gap:7px; padding:13px 2px 3px; font-size:12px; color:#3f6674; }
+.aircraft-details small { font-size:10px; color:#81929f; }
+.aircraft-list { display:grid; gap:5px; margin-top:9px; }
+.aircraft-list button { display:flex; align-items:center; justify-content:space-between; min-height:44px; background:#eaf6f8; border-radius:8px; padding:10px; color:#276c7c; font-size:12px; }
+.traffic-tabs { display:grid; grid-template-columns:1fr 1.3fr; gap:6px; margin-bottom:14px; }
+.traffic-tabs button { display:flex; align-items:center; justify-content:center; gap:5px; min-height:44px; padding:8px 5px; border:1px solid #dde6f1; background:#f7f9fc; border-radius:10px; color:#6c7f97; font-size:10px; font-weight:600; }
+.traffic-tabs button[aria-pressed="true"] { background:#eef4ff; color:#2458bd; border-color:#9cb8df; }
+.traffic-tabs button.prolonged-tab[aria-pressed="true"] { background:#f4edfc; color:#8451a8; border-color:#bf9ed9; }
+.traffic-tabs button>span { min-width:17px; border-radius:10px; background:#ffffffa6; padding:2px 4px; font-size:9px; }
+.observation-caption { margin:0 0 13px; color:#8c789e; font-size:10px; }
+.prolonged-cards { display:grid; gap:10px; }
+.prolonged-card { border:1px solid #e3d6ef; background:#faf6ff; border-radius:13px; padding:12px; }
+.prolonged-card>div:first-child { display:flex; align-items:center; gap:8px; }
+.prolonged-card strong { flex:1; min-width:0; font-size:12px; color:#66517a; }
+.prolonged-card>div:first-child>span:last-child { white-space:nowrap; font-weight:700; font-size:12px; color:#8652a9; }
+.prolonged-actions { display:flex; gap:7px; margin-top:10px; }
+.prolonged-actions button { min-height:40px; display:flex; align-items:center; gap:5px; padding:8px; border:1px solid #dac8e9; border-radius:9px; color:#7d559b; background:#fff; font-size:10px; }
+.prolonged-actions button:first-child { flex:1; justify-content:center; background:#8d62ac; color:#fff; border-color:#8d62ac; }
+@media (max-width:700px) { .aircraft-control { right:13px; bottom:154px; } .aircraft-panel { width:min(270px,calc(100vw - 80px)); } }
+.transit-panel.has-traffic .panel-intro,.transit-panel.has-traffic .panel-search,.transit-panel.has-traffic .mode-filters { display:none; }
+.transit-panel.has-traffic .panel-scroll { padding-top:20px; }
+.header-traffic b.prolonged-count { background:#eadff6; color:#80539d; }
+@media (max-width:700px) { .transit-panel.has-traffic .panel-scroll { padding-top:4px; } .map-legend { bottom:100px; } .map-locate-button { bottom:116px; } .aircraft-control { bottom:170px; } .transit-map-canvas .maplibregl-ctrl-bottom-right { bottom:80px; } }
+.stop-service-notice { display:flex; gap:9px; align-items:center; padding:10px; margin-top:12px; border:1px solid #ecd995; border-radius:11px; background:#fff9e8; color:#9b721c; }
+.stop-service-notice>span { display:grid; place-items:center; width:22px; height:22px; flex-shrink:0; border:2px solid currentColor; border-radius:50%; font-size:19px; font-weight:700; }
+.stop-service-notice p { display:grid; gap:4px; margin:0; }
+.stop-service-notice strong { font-size:11px; }
+.stop-service-notice small { font-size:10px; }
+.stop-service-notice.active { color:#b44957; border-color:#e8bdc4; background:#fff1f3; }
+@media (max-width:700px) { .transit-panel.has-selection.expanded { height:min(90%,900px); } .map-legend { bottom:20px; } .map-locate-button { bottom:42px; } .aircraft-control { bottom:96px; } .transit-map-canvas .maplibregl-ctrl-bottom-right { bottom:0; } }
+.alert-map-link { min-height:44px; display:flex; align-items:center; gap:7px; margin-top:11px; padding:9px 12px; border:1px solid #c3d4ed; background:#eaf2ff; border-radius:9px; color:#315e9a; font-size:11px; font-weight:650; }
+.incident-routes button { min-height:44px; min-width:44px; border:1px solid #e1e7ef; border-radius:10px; background:#ffffff99; }
+.incident-card.upcoming { background:#fffaf0; border-color:#e9d9a6; }
+.incident-card.ended { background:#f7f8fa; border-color:#e6ebf1; }
+.stop-back { display:grid; place-items:center; color:#416a9f; background:#edf3fc; border:1px solid #d9e5f5; }
+.stop-arrival-grid:has(>.stop-arrival-card:only-child) { grid-template-columns:1fr; }
+.stop-arrival-card:only-child { display:grid; grid-template-columns:28px auto minmax(0,1fr); align-items:center; gap:9px; padding:12px; }
+.stop-arrival-card:only-child>span:last-child { text-align:right; }
+.stop-alert-details { margin:14px 0; border-top:1px solid #e6edf4; padding-top:5px; }
+.stop-alert-details summary { min-height:44px; align-content:center; font-size:11px; color:#5f7a9d; cursor:pointer; }

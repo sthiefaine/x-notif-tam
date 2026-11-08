@@ -3,7 +3,8 @@ const assert = require("node:assert/strict");
 const { loadTypeScript } = require("./helpers/load-typescript.cjs");
 const realtime = loadTypeScript("lib/transit/realtime.ts");
 const dwell = loadTypeScript("lib/transit/dwell.ts", { mocks: { "./realtime": realtime } });
-const alerts = loadTypeScript("lib/transit/live-alerts.ts", { mocks: { "./realtime": realtime, "./dwell": dwell } });
+const impacts = loadTypeScript("lib/transit/alert-impacts.ts");
+const alerts = loadTypeScript("lib/transit/live-alerts.ts", { mocks: { "./realtime": realtime, "./dwell": dwell, "./alert-impacts": impacts } });
 const baseTime = Date.parse("2026-11-08T12:00:00Z");
 function fixtureNetwork() {
   const stops = ["A", "B", "C", "D"].map((id, index) => ({ id, name: id, lat: 43.6, lon: 3.8 + index * 0.002, routeIds: ["33"] }));
@@ -416,7 +417,13 @@ test("all alert periods survive for storage while activity respects exact time b
   assert.equal(snapshot.alerts.length, 1);
   assert.equal(snapshot.alerts[0].periods.length, 2);
   assert.equal(snapshot.alerts[0].active, false);
+  assert.equal(snapshot.alerts[0].temporalStatus, "upcoming");
+  assert.equal(snapshot.alerts[0].nextPeriod.start, new Date(baseTime + 3600_000).toISOString());
   assert.equal(snapshot.sources.alerts.fullDataset, true);
+  h.advance(3600);
+  assert.equal(h.collector.getSnapshot().alerts[0].temporalStatus, "active");
+  h.advance(3600);
+  assert.equal(h.collector.getSnapshot().alerts[0].temporalStatus, "expired");
   h.collector.stop();
 });
 

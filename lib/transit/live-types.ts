@@ -63,6 +63,23 @@ export interface LiveArrival {
   freshness: "fresh" | "stale";
   realtime: true;
 }
+export type AlertTemporalStatus = "active" | "upcoming" | "expired" | "unknown";
+export interface AlertPeriod { start: string | null; end: string | null }
+export interface AlertTiming {
+  temporalStatus: AlertTemporalStatus;
+  /** Current continuous period, or the next future period; source bounds only. */
+  nextPeriod?: AlertPeriod;
+}
+export interface LiveStopImpact {
+  stopId: string;
+  /** Empty only for a structured stop selector applying to all routes. */
+  routeIds: string[];
+  serviceStatus: "not_served" | "affected";
+  evidence: "structured" | "explicit_text" | "explicit_range";
+  /** Present only when established by the source or one unambiguous GTFS range. */
+  directionId?: number;
+}
+export interface TimedStopImpact extends LiveStopImpact, AlertTiming { alertId: string }
 export interface LiveAlert {
   id: string;
   routeIds: string[];
@@ -72,7 +89,13 @@ export interface LiveAlert {
   stopIds: string[];
   header: string;
   description: string;
-  periods: { start: string | null; end: string | null }[];
+  periods: AlertPeriod[];
+  /** Invalid source bounds are never converted into an unbounded closure. */
+  timingUncertain?: boolean;
+  temporalStatus?: AlertTemporalStatus;
+  nextPeriod?: AlertPeriod;
+  /** Separate from raw stopIds: explicit text is not segment geometry evidence. */
+  stopImpacts?: LiveStopImpact[];
   cause: string;
   effect: string;
   scope: "network" | "line" | "stops" | "segment";
