@@ -1,13 +1,17 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const { loadTypeScript } = require("./helpers/load-typescript.cjs");
+const { loadBotAlertRoutes } = require("./helpers/bot-alert-routes.cjs");
+const { createHash } = require("node:crypto");
 
-function createCollection({ env, fetch, failDatabase = false } = {}) {
+function createCollection({ env, fetch, failDatabase = false, routes } = {}) {
   const writes = [];
+  const parentQueries = [];
   let publications = 0;
   const module = loadTypeScript("tasks/fetchAlerts.ts", {
     env,
     mocks: {
+      "@/app/api/post_tweets/alertRoutes": routes ?? loadBotAlertRoutes(),
       protobufjs: {
         load: async () => ({
           lookupType: () => ({
@@ -21,7 +25,10 @@ function createCollection({ env, fetch, failDatabase = false } = {}) {
           if (failDatabase) throw new Error("database unavailable");
         },
         prisma: {
-          alert: { upsert: async (input) => writes.push(input) },
+          alert: {
+            upsert: async (input) => writes.push(input),
+            findMany: async (query) => { parentQueries.push(query); return []; },
+          },
           $transaction: async (callback) => callback({
             alert: {
               findMany: async () => [],
@@ -41,7 +48,7 @@ function createCollection({ env, fetch, failDatabase = false } = {}) {
     },
     globals: { fetch },
   });
-  return { collect: module.fetchAndProcessAlerts, writes, publications: () => publications };
+  return { collect: module.fetchAndProcessAlerts, writes, parentQueries, publications: () => publications };
 }
 
 function feedResponse(entity = []) {
@@ -102,6 +109,56 @@ test("continues after a failed source and reports the partial result", async () 
   assert.equal(result.processedEntities, 1);
   assert.equal(collection.writes[0].create.routeIds, "33");
   assert.equal(collection.publications(), 0);
+});
+
+test("the current line A producer selector is canonicalized without changing identity or publication guards", async () => {
+  const header = "    TR/LIGNE A/ ligne a retard sans cause";
+  const collection = createCollection({ fetch: async () => feedResponse([{
+    id: "1052756", alert: {
+      headerText: { translation: [{ text: header }] },
+      descriptionText: { translation: [{ text: "Des retards sont annoncés sur la ligne A." }] },
+      informedEntity: [{ routeId: "61" }], activePeriod: [{ start: "1794147240", end: "1794151800" }],
+    },
+  }]) });
+  await collection.collect();
+  const write = collection.writes[0];
+  assert.equal(write.create.routeIds, "A");
+  assert.equal(write.update.routeIds, "A");
+  assert.equal(write.where.id, `1052756_${createHash("md5").update(header).digest("hex")}`);
+  assert.equal(write.where.id, "1052756_975a8deeb52a863da0154514cedc4bf3");
+  assert.equal(write.update.headerText, header);
+  for (const guard of ["isPosted", "isProcessing", "inProcessSince"]) assert.equal(Object.hasOwn(write.update, guard), false);
+  assert.equal(collection.publications(), 0);
+});
+
+test("line A complements match complete route tokens rather than the Amigo substring", async () => {
+  const collection = createCollection({ fetch: async () => feedResponse([{
+    id: "resolution", alert: {
+      headerText: { translation: [{ text: "Reprise ligne A" }] },
+      descriptionText: { translation: [{ text: "La circulation reprend sur la ligne A." }] },
+      informedEntity: [{ routeId: "61" }], activePeriod: [{ start: "1794147240" }],
+    },
+  }]) });
+  await collection.collect();
+  const filters = collection.parentQueries[0].where.AND[0].OR;
+  assert.equal(filters[0].routeIds, "A");
+  assert.equal(filters.some((filter) => filter.routeIds?.contains === "A"), false);
+  assert.equal(filters.some((filter) => filter.routeIds?.contains === ",A,"), true);
+  assert.equal(collection.writes[0].create.routeIds, "A");
+});
+
+test("missing static data or several route selectors never cause a guessed line assignment", async () => {
+  for (const scenario of [
+    { selectors: [{ routeId: "61" }], routes: loadBotAlertRoutes({ unavailable: true }), expected: "61" },
+    { selectors: [{ routeId: "61" }, { routeId: "62" }], expected: "61,62" },
+  ]) {
+    const collection = createCollection({ routes: scenario.routes, fetch: async () => feedResponse([{
+      id: "safe", alert: { headerText: { translation: [{ text: "Ligne A" }] },
+        descriptionText: { translation: [{ text: "Retard sur la ligne A." }] }, informedEntity: scenario.selectors },
+    }]) });
+    await collection.collect();
+    assert.equal(collection.writes[0].create.routeIds, scenario.expected);
+  }
 });
 
 test("reports malformed feed and timeout failures", async () => {

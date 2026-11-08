@@ -339,3 +339,79 @@ button svg,a svg { flex:none; }
 .legend-items>span { font-size:10px; }
 .stop-reference { display:block; font-size:9px; color:#8c9aab; margin-top:5px; }
 .transit-panel-footer>span>a { display:inline; font-size:inherit; }
+
+/* Traveller controls stay in the header; the map keeps its useful space. */
+.has-map-controls { gap:18px; }
+.has-map-controls .header-map-controls { order:1; margin-left:auto; display:flex; align-items:center; gap:8px; }
+.has-map-controls nav { order:2; margin-left:0; }
+.has-map-controls .network-live-status { order:3; }
+.header-map-controls .view-toggle button { min-height:34px; padding:6px 10px; font-size:12px; }
+.header-traffic { display:flex; align-items:center; gap:6px; min-height:40px; padding:7px 11px; border:1px solid #e1e7ef; border-radius:8px; background:#f5f7fa; color:#61748e; font-size:12px; font-weight:650; }
+.header-traffic b { display:grid; place-items:center; min-width:20px; height:20px; padding-inline:4px; border-radius:50%; background:#e5eaf2; font-size:11px; }
+.header-traffic.has-incidents { background:#fff5db; border-color:#efd495; color:#8b5c0d; }
+.header-traffic.has-incidents b { background:#d18b20; color:#fff; }
+.transit-map-canvas .maplibregl-ctrl-top-right { top:20px; }
+.route-incident-badge { position:absolute; top:4px; right:4px; width:22px; height:22px; display:grid; place-items:center; border:2px solid #fff; border-radius:50%; background:#ffd77b; color:#785018; box-shadow:0 1px 3px #7252121f; }
+.current-alerts-preview { margin-bottom:22px; }
+.current-alerts-preview .panel-section-heading h2 { color:#9a6415; }
+.incident-card.information { background:#fff9ee; border-color:#eed9b6; }
+.incident-card.selected { outline:2px solid #d19438; outline-offset:2px; }
+.incident-card h3 { font-size:13px; margin:10px 0 5px; }
+.incident-card p { color:#5d6c81; font-size:11px; }
+.incident-card>small { display:flex; align-items:flex-start; gap:5px; font-size:9px; color:#7a8392; }
+.incident-card>small svg { flex:none; margin-top:2px; }
+.map-density-note { position:absolute; left:20px; top:20px; display:flex; align-items:center; gap:6px; max-width:calc(100% - 90px); background:#fffffff0; padding:8px 11px; border:1px solid #e1e7ef; border-radius:8px; color:#60738d; font-size:10px; pointer-events:none; }
+.vehicle-state-detail { display:flex; gap:9px; align-items:center; border-top:1px solid #eef0f4; margin-top:13px; padding-top:13px; }
+.vehicle-state-detail strong { display:block; font-size:12px; }
+.vehicle-state-detail small { display:block; color:#7c8899; font-size:10px; line-height:1.6; margin-top:3px; }
+.vehicle-state-dot { width:11px; height:11px; flex:none; border-radius:50%; background:currentColor; box-shadow:0 0 0 4px #f2f4f7; }
+.selected-vehicle-card.state-prolonged { border-color:#c7a7df; }
+.selected-vehicle-card.state-delay { border-color:#eccb91; }
+@media (max-width:1090px) {
+  .has-map-controls { gap:12px; }
+  .has-map-controls nav a span { display:none; }
+  .has-map-controls nav { gap:15px; }
+}
+@media (max-width:700px) {
+  .transit-app { --header-height:112px; }
+  .transit-header.has-map-controls { display:grid; height:112px; grid-template-columns:1fr auto; grid-template-rows:56px 52px; gap:0 12px; padding:0 14px 4px; }
+  .has-map-controls .transit-brand { grid-column:1; grid-row:1; }
+  .has-map-controls nav { grid-column:2; grid-row:1; margin-left:0; height:100%; }
+  .has-map-controls .header-map-controls { grid-column:1 / -1; grid-row:2; width:100%; margin:0; gap:8px; }
+  .header-map-controls .view-toggle { flex:1; display:flex; height:46px; }
+  .header-map-controls .view-toggle button { flex:1; min-height:40px; gap:6px; font-size:12px; }
+  .header-map-controls .view-toggle button>svg { width:17px; height:17px; }
+  .header-map-controls .header-traffic { height:44px; }
+  .header-map-controls .map-control-button { width:44px; height:44px; flex:none; }
+  .transit-map-area { inset:0 0 72px; }
+  .transit-panel { height:72px; border-radius:18px 18px 0 0; }
+  .transit-panel.expanded { height:min(78%,760px); }
+  .transit-panel:not(.expanded) .panel-search,.transit-panel:not(.expanded) .mode-filters,.transit-panel:not(.expanded) .panel-scroll,.transit-panel:not(.expanded) .location-message { display:none; }
+  .mobile-panel-handle { height:70px; min-height:70px; touch-action:none; user-select:none; padding:8px 16px 9px; gap:8px; }
+  .mobile-panel-handle>.panel-grip { width:36px; height:4px; border-radius:3px; background:#bccbdd; }
+  .mobile-panel-handle>.panel-handle-label { display:flex; align-items:center; gap:9px; width:100%; height:auto; border-radius:0; background:transparent; color:#536d90; }
+  .panel-handle-label strong { flex:1; font-size:12px; font-weight:650; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; text-align:left; }
+  .panel-handle-label small { display:block; font-size:11px; background:#eff3fa; padding:8px 10px; border-radius:8px; white-space:nowrap; }
+  .panel-handle-label>svg:last-child { transform:rotate(-90deg); }
+  .expanded .panel-handle-label>svg:last-child { transform:rotate(90deg); }
+  .transit-panel.expanded .panel-scroll { overflow:auto; overscroll-behavior:contain; }
+  .transit-panel.expanded .panel-search { margin-top:0; }
+  .transit-map-canvas .maplibregl-ctrl-top-right { top:14px; }
+  .map-density-note { top:14px; left:13px; font-size:9px; padding:7px 9px; max-width:calc(100% - 83px); }
+  .map-locate-button { bottom:100px; }
+  .map-live-summary { bottom:18px; }
+  .map-legend { bottom:53px; }
+  .selected-vehicle-card { bottom:68px; }
+  .list-layout .transit-map-area { inset:0; height:auto; }
+  .list-layout { padding-top:0; }
+  .list-layout .transit-panel { min-height:calc(100dvh - var(--header-height)); }
+  .list-layout .panel-search,.list-layout .panel-scroll,.list-layout .mode-filters { display:flex; }
+  .list-layout .panel-scroll { display:block; }
+}
+@media (prefers-reduced-motion:reduce) { .transit-panel { transition:none; } }
+
+@media (min-width:701px) { .transit-panel.has-selection .panel-intro { display:none; } .transit-panel.has-selection .panel-search { margin-top:20px; } }
+
+@media (max-width:700px) { .transit-panel.has-selection .panel-search,.transit-panel.has-selection .mode-filters,.transit-panel.has-selection .route-full-name,.transit-panel.has-selection .direction-picker,.transit-panel.has-selection .line-observations { display:none; } .transit-panel.has-selection .route-detail-heading { margin-bottom:15px; } }
+
+.recent-alert-note { font-size:10px; line-height:1.6; color:#7b899a; margin:0 0 13px; }

@@ -10,6 +10,18 @@ L'accueil de [x-notif-tam.clairdev.com](https://x-notif-tam.clairdev.com/) affic
 - Le signal lavande utilise des mesures fraîches, un arrêt et une course connus, les horaires et plusieurs observations ; terminus, pauses prévues et pertes GPS ne sont pas qualifiés d'anormaux. La cause reste inconnue.
 - Fond clair OpenFreeMap configurable, attribution visible, liste équivalente lorsque WebGL est indisponible, favoris locaux et géolocalisation volontaire.
 
+## Fréquences de passage et affichage voyageurs
+
+La page `/statistiques` distingue les horaires **prévus** GTFS et les passages **observés** par GPS. Moyenne et médiane se calculent entre deux passages au même point d’arrêt et dans le même sens. Les bilans tram et bus regroupent ces intervalles ; une longue ligne et des arrêts très desservis contribuent davantage. La fenêtre prévue est 7 h – 21 h, heure de Paris ; les observations s’arrêtent à l’heure courante. Ces distributions ne sont pas un taux de ponctualité.
+
+Les observations sont partielles, fondées sur des positions fraîches, des courses reconnues et une présence proche de l’arrêt. Aucun horaire prédit n’est compté comme passage réel. Les coupures de collecte sont exclues. Les faits compacts de passage (sans coordonnées) et la couverture minute restent sept jours, avec un plafond de 100 000 passages ; `TRANSIT_HEADWAYS_ENABLED=false` désactive cette collecte. Les tables sont créées par la même migration additive au démarrage.
+
+La carte donne la priorité visuelle aux trams à faible zoom. Les lignes sélectionnées, favorites ou perturbées, ainsi que les véhicules présentant un état d’attention, restent visibles. Les autres bus apparaissent en zoomant. Le panneau mobile s’ouvre par pression ou glissement de sa poignée ; les commandes Carte/Liste et Trafic sont dans l’en-tête. Une ligne s’explore sur un schéma des arrêts GTFS, dont les positions de véhicules restent indicatives. Les états « position ancienne », « arrêt prolongé » et « retard annoncé » gardent leur provenance ; aucune présence de contrôleurs n’est déduite.
+
+Les alertes utilisent l’identifiant commercial lorsque le texte officiel et le référentiel permettent de résoudre un selector interne inconnu (par exemple 61 → A). Le selector brut est conservé. Les marqueurs distinguent un arrêt concerné d’un simple repère de ligne, qui ne localise pas l’incident.
+
+Une tentative X dont l’envoi n’a pas été confirmé reste en quarantaine. L’API protégée `/api/post_tweets?dryRun=true` expose les alertes en attente et leur état, sans les republier ; les alertes déjà en quarantaine ne sont jamais libérées par une mise à jour du code ou un changement de libellé.
+
 ## Conservation et bilans
 
 Les échantillons GPS utiles au diagnostic sont enregistrés au maximum une fois par minute, conservés **24 heures au maximum** avec un plafond de **200 000 lignes**, et désactivables. Ces limites sont configurables et bornées ; aucune trajectoire exhaustive n'est conservée indéfiniment.

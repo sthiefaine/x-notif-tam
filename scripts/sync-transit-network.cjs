@@ -17,11 +17,14 @@ const OPEN_LICENCE = { name: "Licence Ouverte / Open Licence", url: "https://www
 const GEOMETRY_SOURCES = [
   { name: "Tracés opérationnels tramway", url: "https://data.montpellier3m.fr/sites/default/files/ressources/MMM_MMM_LigneTram.json", mode: "tram", operational: true, licence: OPEN_LICENCE },
   { name: "Tracés opérationnels bus", url: "https://data.montpellier3m.fr/sites/default/files/ressources/MMM_MMM_BusLigne.json", mode: "bus", operational: true, licence: OPEN_LICENCE },
+  // Existing BHNS routes are a distinct official resource from the projects.
+  { name: "Tracés opérationnels bustram", url: "https://data.montpellier3m.fr/sites/default/files/ressources/MMM_MMM_Bustram.json", mode: "bus", operational: true, licence: ODBL },
 ];
 const MAX_ZIP_BYTES = 20 * 1024 * 1024;
 const MAX_EXPANDED_BYTES = 160 * 1024 * 1024;
 const MAX_GEOMETRY_BYTES = 8 * 1024 * 1024;
 const VERSION_PATTERN = /^[a-f0-9]{24}$/;
+const COMPILER_VERSION = "tam-network-3-public-patterns";
 const hash = (value, length = 64) => createHash("sha256").update(value).digest("hex").slice(0, length);
 const clean = (value) => String(value ?? "").trim();
 const normalized = (value) => clean(value).normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
@@ -115,7 +118,7 @@ function geometryFeatures(sources, routes, stops, patterns) {
       if ([properties.fonctionnement, properties.fonctionne, properties.statut, properties.mode]
         .some((value) => /projet|futur|prevision|etude/.test(normalized(value)))) continue;
       const label = clean(properties.num_commercial)
-        || /^([LT]?\d+|Amigo|A)(?:\s|$)/i.exec(clean(properties.nom_ligne))?.[1]
+        || /^(?:bustram\s+)?([LT]?\d+|Amigo|[A-Z])(?:\s|$)/i.exec(clean(properties.nom_ligne))?.[1]
         || clean(properties.num_exploitation);
       const candidate = label.replace(/^[LT](?=\d)/i, "");
       const route = Object.values(routes).find((item) =>
@@ -139,8 +142,8 @@ function geometryFeatures(sources, routes, stops, patterns) {
           if (pattern.routeId !== route.id || pattern.directionId === null || pattern.stopIds.length < 2) continue;
           const first = stops[pattern.stopIds[0]];
           const last = stops[pattern.stopIds.at(-1)];
-          if (first && last && distanceMeters(start, [first.lon, first.lat]) < 250
-            && distanceMeters(end, [last.lon, last.lat]) < 250) directions.add(pattern.directionId);
+          if (first && last && distanceMeters(start, [first.lon, first.lat]) < 75
+            && distanceMeters(end, [last.lon, last.lat]) < 75) directions.add(pattern.directionId);
         }
       }
       const coordinates = geometry.type === "LineString" ? rounded[0] : rounded;
@@ -160,7 +163,7 @@ function geometryFeatures(sources, routes, stops, patterns) {
 
 async function compileTransitNetwork({ zipBuffer, geometrySources = [], generatedAt = new Date().toISOString() }) {
   const { files, shapesAvailable } = unpackGtfs(zipBuffer);
-  const version = hash(Buffer.concat([zipBuffer, ...geometrySources.filter((s) => s.operational === true)
+  const version = hash(Buffer.concat([Buffer.from(COMPILER_VERSION), zipBuffer, ...geometrySources.filter((s) => s.operational === true)
     .map((source) => Buffer.from(`${source.url}:${JSON.stringify(source.data)}`))]), 24);
   const routes = Object.create(null);
   const stops = Object.create(null);
@@ -269,6 +272,7 @@ async function compileTransitNetwork({ zipBuffer, geometrySources = [], generate
     routes: Object.values(routes).sort((a, b) => a.shortName.localeCompare(b.shortName, "fr", { numeric: true })),
     stops: Object.values(stops).map((stop) => ({ ...stop, routeIds: [...stop.routeIds].sort() })),
     lineFeatures: { type: "FeatureCollection", features },
+    routePatterns: Object.values(patterns),
   };
   if (!network.routes.length || !network.stops.length || !Object.keys(trips).length) throw new Error("Référentiel GTFS vide");
   return { network, lookup: { metadata: { version, generatedAt, timezone }, trips, patterns, timingProfiles,

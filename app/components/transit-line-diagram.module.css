@@ -1,0 +1,54 @@
+.panel { border: 1px solid #e5e9ee; border-radius: 18px; background: #fff; padding: 18px 15px; margin: 18px 0; color: #233044; }
+.heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.heading h3 { font-size: 17px; line-height: 1.35; margin: 4px 0 0; letter-spacing: -.35px; }
+.kicker { color: #728096; font-size: 9px; font-weight: 800; letter-spacing: 1.4px; }
+.lineBadge { min-width: 36px; height: 32px; padding: 0 8px; border-radius: 9px; background: var(--diagram-line, #475569); display: inline-flex; align-items: center; justify-content: center; font-size: 15px; font-weight: 800; }
+.explanation, .destination { color: #68758a; font-size: 11px; line-height: 1.65; margin: 12px 0; }
+.destination { color: #334155; font-weight: 700; }
+.variantPicker { display: grid; gap: 7px; margin-top: 15px; font-size: 11px; font-weight: 700; color: #6b7789; }
+.variantPicker select { width: 100%; min-width: 0; font: inherit; color: #26344a; background: #f7f9fc; border: 1px solid #dce3ec; border-radius: 9px; padding: 10px 28px 10px 9px; }
+.lineAlerts { display: grid; gap: 8px; margin: 14px 0; }
+.lineAlerts > div { display: flex; gap: 10px; padding: 11px; border: 1px solid #f1dca9; background: #fffbef; border-radius: 11px; }
+.lineAlerts > div > span, .stopAlert { display: inline-flex; flex-shrink: 0; align-items: center; justify-content: center; width: 19px; height: 19px; border-radius: 50%; color: #8d6209; background: #ffecb4; font-weight: 900; }
+.lineAlerts p { margin: 0; font-size: 11px; line-height: 1.55; }
+.lineAlerts strong, .lineAlerts small, .lineAlerts em { display: block; }
+.lineAlerts small { margin-top: 4px; color: #75674b; }
+.lineAlerts em { font-size: 10px; color: #8b7654; margin-top: 7px; font-style: normal; }
+.scroll { max-height: none; overflow: visible; margin: 10px -6px 0; padding: 0 6px; }
+.schematic { position: relative; }
+.track { position: absolute; left: 52px; width: 5px; border-radius: 8px; background: var(--diagram-line, #475569); opacity: .75; }
+.stations { list-style: none; padding: 0; margin: 0; }
+.stationRow { height: 72px; display: flex; align-items: center; margin: 0; }
+.stationButton { display: flex; align-items: center; gap: 11px; width: calc(100% - 40px); margin-left: 40px; padding: 8px 7px 8px 5px; text-align: left; color: inherit; border: 0; border-radius: 10px; background: transparent; cursor: pointer; min-width: 0; }
+.stationButton:hover { background: #f3f7fb; }
+.stationButton:focus-visible, .vehicle:focus-visible, .unplaced button:focus-visible, .variantPicker select:focus-visible { outline: 3px solid #4a82ba; outline-offset: 2px; }
+.selected { background: #edf4fb; }
+.stationDot { display: block; position: relative; width: 18px; height: 18px; margin-left: 1px; flex-shrink: 0; background: #fff; border: 3px solid var(--diagram-line, #475569); border-radius: 50%; box-sizing: border-box; }
+.terminus { box-shadow: 0 0 0 3px white, 0 0 0 5px var(--diagram-line, #475569); }
+.stationName { display: grid; gap: 5px; min-width: 0; flex: 1; }
+.stationName strong { font-size: 12px; line-height: 1.3; font-weight: 700; }
+.stationName small { color: #8190a2; font-size: 9px; line-height: 1.3; }
+.stopAlert { font-size: 11px; width: 17px; height: 17px; }
+.arrival { font-size: 10px; color: #397461; white-space: nowrap; padding: 5px 7px; background: #edf7f1; border-radius: 6px; }
+.vehicleTrack { position: absolute; top: 0; left: 0; width: 39px; height: 100%; pointer-events: none; }
+.vehicle { position: absolute; transform: translateY(-50%); pointer-events: auto; min-width: 31px; height: 42px; padding: 3px 4px; display: grid; justify-items: center; gap: 0; border-radius: 9px; border: 1px solid var(--vehicle-state, #4c8094); background: #fff; color: var(--vehicle-state, #4c8094); box-shadow: 0 2px 7px #102a4318; cursor: pointer; z-index: 2; transition: top .5s ease; }
+.vehicle span { font-size: 8px; font-weight: 800; line-height: 1; letter-spacing: -.25px; }
+.moving { background: #f2f9ff; }
+.at_stop { background: #f0f8f2; }
+.delay { background: #fff7e8; border-width: 2px; }
+.prolonged { background: #f6efff; box-shadow: 0 0 0 5px #b9a2dd39; border-width: 2px; }
+.stale { background: #f3f4f6; border-style: dashed; color: #838995; filter: grayscale(1); }
+.unknown { background: #fff; border-style: dotted; }
+.legend { border-top: 1px solid #eef1f5; padding-top: 12px; margin-top: 7px; display: flex; flex-wrap: wrap; gap: 9px 13px; font-size: 9px; color: #78859a; }
+.legend span { display: inline-flex; align-items: center; gap: 5px; }
+.legend i { display: inline-block; width: 8px; height: 8px; border-radius: 3px; }
+.legendVehicle { background: #4584a4; }
+.legendStale { background: #a3aab4; }
+.legendProlonged { background: #a78bce; }
+.unplaced { display: grid; gap: 5px; margin-top: 14px; padding-top: 10px; border-top: 1px solid #eef1f5; }
+.unplaced > strong { font-size: 10px; line-height: 1.5; color: #758298; margin-bottom: 3px; }
+.unplaced button { display: flex; justify-content: space-between; gap: 12px; text-align: left; border: 0; background: #f8fafc; padding: 8px; border-radius: 7px; cursor: pointer; font-size: 10px; color: #4d5d72; }
+.unplaced button span { font-size: 9px; color: #7e8c9d; }
+.empty { padding: 11px 0 0; margin: 0; font-size: 11px; line-height: 1.7; color: #8490a0; }
+@media (max-width: 420px) { .panel { padding: 15px 11px; } .stationButton { gap: 8px; } .stationName strong { font-size: 11px; } .arrival { padding: 4px; font-size: 9px; } }
+@media (prefers-reduced-motion: reduce) { .vehicle { transition: none; } }

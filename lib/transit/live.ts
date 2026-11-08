@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import path from "node:path";
 import * as protobuf from "protobufjs";
 import { getTransitNetwork, getTripLookup } from "./network";
@@ -8,6 +8,7 @@ import { ageSeconds, FRESH_SECONDS, HIDE_SECONDS, normalizeArrivals, normalizeVe
   type ArrivalRecord, type RealtimeFeed, type VehicleRecord } from "./realtime";
 import { normalizeAlerts, isAlertActive } from "./live-alerts";
 import { DwellDetector } from "./dwell";
+import type { HeadwayFeed } from "./headways-detector";
 
 const SOURCE_NAMES: LiveSourceName[] = ["vehicles", "tripUpdates", "alerts"];
 const URLS: Record<LiveSourceName, string> = {
@@ -67,6 +68,7 @@ export interface LiveCollectorOptions {
   lookup?: (version?: string) => Promise<TransitTripLookup>;
   decode?: (buffer: Uint8Array) => Promise<RealtimeFeed> | RealtimeFeed;
   persist?: (snapshot: LiveSnapshot) => Promise<void>;
+  observePassages?: (feed: HeadwayFeed) => Promise<void>;
   schedule?: typeof setTimeout;
   cancel?: typeof clearTimeout;
 }
@@ -74,6 +76,8 @@ export interface LiveCollectorOptions {
 export class LiveCollector {
   private readonly options: Required<Pick<LiveCollectorOptions, "fetcher" | "now" | "random" | "network" | "lookup" | "decode" | "schedule" | "cancel">>;
   private readonly persist: (snapshot: LiveSnapshot) => Promise<void>;
+  private readonly observePassages: (feed: HeadwayFeed) => Promise<void>;
+  private readonly headwayStreamId = randomUUID();
   private sources = Object.fromEntries(SOURCE_NAMES.map((name) => [name, initialQuality()])) as Record<LiveSourceName, LiveSourceQuality>;
   private timers = new Map<LiveSourceName, ReturnType<typeof setTimeout>>();
   private requests = new Map<LiveSourceName, AbortController>();
@@ -100,6 +104,11 @@ export class LiveCollector {
     this.persist = options.persist ?? (async (snapshot) => {
       const storage = await import("./storage");
       await storage.recordTransitSnapshot(snapshot);
+    });
+    // Injected snapshot persistence isolates collector tests from every DB write.
+    this.observePassages = options.observePassages ?? (options.persist ? async () => {} : async (feed) => {
+      const storage = await import("./headways-storage");
+      await storage.recordHeadwayFeed(feed);
     });
     this.updatedAt = this.options.now();
   }
@@ -161,6 +170,8 @@ export class LiveCollector {
         if (!this.sources[source].lastSuccessAt) throw new SourceFailure("Source inchangée sans instantané initial");
         if (this.stopped || this.generation !== generation) return false;
         Object.assign(this.sources[source], { lastCheckedAt: new Date(checkedAt).toISOString(), failures: 0, nextRetryAt: null, error: null, status: "ok" });
+        if (source === "vehicles") this.recordPassages([...this.vehicles.values()], checkedAt,
+          this.sources[source].feedTimestamp ? Date.parse(this.sources[source].feedTimestamp!) : null);
         return true;
       }
       if (!response.ok) throw new SourceFailure(`Source HTTP ${response.status}`, retryAfter(response, checkedAt));
@@ -182,16 +193,19 @@ export class LiveCollector {
         staleCount = normalized.staleCount;
         if (full) this.dwell.retain(new Set(normalized.records.map((record) => record.vehicle.id)));
         const next = full ? new Map<string, VehicleRecord>() : new Map(this.vehicles);
+        const accepted: VehicleRecord[] = [];
         for (const id of deleted) next.delete(id);
         for (const record of normalized.records.slice(0, 2000)) {
           const prior = this.vehicles.get(record.entityId);
           if (prior && Date.parse(prior.vehicle.timestamp) > Date.parse(record.vehicle.timestamp)) { next.set(record.entityId, prior); continue; }
           record.vehicle.prolongedStop = this.dwell.update(record, this.network!, this.lookup!, now);
           next.set(record.entityId, record);
+          accepted.push(record);
         }
         for (const [id, record] of next) if (ageSeconds(record.vehicle.timestamp, now) > HIDE_SECONDS) next.delete(id);
         while (next.size > 2000) next.delete(next.keys().next().value!);
         this.vehicles = next;
+        this.recordPassages(accepted, now, timestamp);
       } else if (source === "tripUpdates") {
         const normalized = normalizeArrivals(feed, this.network!, this.lookup!, now);
         missingTimestampCount = normalized.missingTimestampCount; unmatchedTripCount = normalized.unmatchedTripCount;
@@ -232,7 +246,7 @@ export class LiveCollector {
     } catch (error) {
       if (this.stopped || this.generation !== generation) return false;
       const quality = this.sources[source], now = this.options.now();
-      if (source === "vehicles") this.dwell.reset();
+      if (source === "vehicles") { this.dwell.reset(); this.recordPassages([], now, null); }
       quality.failures++;
       const exponential = Math.min(300_000, POLL_MS * 2 ** Math.min(quality.failures - 1, 4));
       const delay = error instanceof SourceFailure && error.retryMs ? error.retryMs : Math.round(exponential * (0.9 + this.options.random() * 0.2));
@@ -243,6 +257,13 @@ export class LiveCollector {
       this.options.cancel(timeout);
       if (this.requests.get(source) === controller) this.requests.delete(source);
     }
+  }
+  private recordPassages(records: VehicleRecord[], now: number, timestamp: number | null) {
+    if (!this.network || !this.lookup) return;
+    const healthy = timestamp !== null && timestamp <= now + 30_000 && now - timestamp <= 90_000
+      && records.some((record) => ageSeconds(record.vehicle.timestamp, now) <= FRESH_SECONDS);
+    void this.observePassages({ records, now, network: this.network, lookup: this.lookup, healthy, streamId: this.headwayStreamId })
+      .catch(() => { console.warn("[transit] Les statistiques de passages attendent leur prochaine observation."); });
   }
   private enforceBudget() {
     const size = (key: string, value: unknown) => Buffer.byteLength(JSON.stringify(value)) + Buffer.byteLength(key) + 32;

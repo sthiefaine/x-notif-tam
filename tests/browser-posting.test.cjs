@@ -63,8 +63,12 @@ function fixture(options = {}) {
         if (state.fillError) throw state.fillError;
         state.fills.push(text);
       },
-      click: async () => {
+      click: async (options = {}) => {
         requireAvailable();
+        if (options.trial) {
+          if (state.trialError) throw state.trialError;
+          return;
+        }
         state.clicks++;
         if (state.clickError) throw state.clickError;
       },
@@ -318,6 +322,7 @@ test("initialization and publication failures close resources without exposing r
   assert.equal(unconfirmed.error.code, "BROWSER_TIMEOUT");
   assert.equal(unconfirmed.error.status, 504);
   assert.equal(unconfirmed.error.uncertain, true);
+  assert.equal(unconfirmed.error.stage, "confirmation");
   assert.equal(publication.state.browserClosed, 1);
   assert.equal(publication.state.contextClosed, 1);
   assert.equal(JSON.stringify(unconfirmed).includes("secret-request-content"), false);
@@ -327,6 +332,20 @@ test("initialization and publication failures close resources without exposing r
   assert.equal(notSubmitted.error.code, "BROWSER_TIMEOUT");
   assert.equal(notSubmitted.error.uncertain, undefined);
   assert.equal(beforeClick.state.clicks, 0);
+});
+
+test("a submit preflight timeout never clicks, waits for CreateTweet or marks a submission uncertain", async () => {
+  const timeout = new Error("fake button not actionable");
+  timeout.name = "TimeoutError";
+  const { client, state } = fixture({ state: { trialError: timeout } });
+  const result = await client.postToBrowser("test");
+  assert.equal(result.success, false);
+  assert.equal(result.error.code, "BROWSER_TIMEOUT");
+  assert.equal(result.error.stage, "submit_preflight");
+  assert.equal(result.error.uncertain, undefined);
+  assert.equal(state.clicks, 0);
+  assert.equal(state.contextClosed, 1);
+  assert.equal(state.browserClosed, 1);
 });
 
 test("initialization deadline closes a browser that finishes launching after timeout", async () => {

@@ -96,6 +96,22 @@ test("keeps operational geometry only and never equates source Retour to GTFS di
   assert.equal(network.lineFeatures.features.some((feature) => /Projet/.test(feature.properties.source)), false);
 });
 
+test("adds the existing Bustram A geometry separately from project lines and exposes ordered patterns without times", async () => {
+  const source = { name: "Bustram existant", url: "https://example.test/MMM_MMM_Bustram.json", mode: "bus", operational: true,
+    licence: { name: "ODbL", url: "https://example.test/licence" },
+    data: { features: [{ properties: { nom_ligne: "Bustram A Milieu > Fin", fonctionnement: "Ligne Régulière", sens: "Retour" },
+      geometry: { type: "LineString", coordinates: [[3.801, 43.601], [3.802, 43.602]] } }] } };
+  const { network } = await compileTransitNetwork({ zipBuffer: fixture(), geometrySources: [...geometries(), source] });
+  const feature = network.lineFeatures.features.find((item) => item.properties.routeId === "A");
+  assert.ok(feature);
+  assert.equal(feature.properties.direction, 0);
+  assert.equal(network.routes.find((route) => route.id === "A").geometryAvailable, true);
+  const loop = network.routePatterns.find((pattern) => pattern.routeId === "Amigo");
+  assert.deepEqual(loop.stopIds, ["001", "002", "001"]);
+  assert.equal(loop.arrivalOffsets, undefined);
+  assert.equal(network.timingProfiles, undefined);
+});
+
 test("the pinned official protobuf decodes a wire fixture and leaves unknown raw trips unmatched", async () => {
   const root = await protobuf.load(path.resolve(__dirname, "../lib/gtfs-realtime.proto"));
   const type = root.lookupType("transit_realtime.FeedMessage");

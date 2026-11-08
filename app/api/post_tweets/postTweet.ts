@@ -3,6 +3,7 @@ import { Alert } from "@prisma/client";
 import type { XApiError } from "./xApiClient";
 import { getPublisherConfiguration, createTextPublisher } from "./publisher";
 import { restorePublicationStates, preparePublicationGroup, confirmPublicationGroup, releaseRejectedGroup } from "@/lib/transit/publication-ledger";
+import { getKnownAlertRouteIds, normalizeBotRouteIds } from "./alertRoutes";
 
 const wait = (ms: number): Promise<void> =>
   new Promise((resolve) => setTimeout(resolve, ms));
@@ -33,6 +34,7 @@ export type PostingResult = {
 const isTramway = (routeId: string): boolean => {
   // Remove any prefix (like "T-" or "X-")
   const numericPart = routeId.split("-").pop() || routeId;
+  if (!/^\d+$/.test(numericPart)) return false;
   const lineNumber = parseInt(numericPart, 10);
   return !isNaN(lineNumber) && lineNumber >= 1 && lineNumber <= 5;
 };
@@ -122,7 +124,7 @@ export const groupAlertsByHeader = (
  * @param alerts Alerts with the same header text
  * @returns Formatted tweet text
  */
-export const formatTweetFromAlertGroup = (alerts: Alert[]): string => {
+export const formatTweetFromAlertGroup = (alerts: Alert[], knownRouteIds?: ReadonlySet<string>): string => {
   if (alerts.length === 0) return "";
 
   const headerText = alerts[0].headerText;
@@ -138,7 +140,7 @@ export const formatTweetFromAlertGroup = (alerts: Alert[]): string => {
 
   alerts.forEach((alert) => {
     if (alert.routeIds) {
-      alert.routeIds.split(",").forEach((route) => {
+      normalizeBotRouteIds(alert.routeIds.split(","), `${alert.headerText} ${alert.descriptionText}`, knownRouteIds).forEach((route) => {
         const trimmedRoute = (route.split("-").pop() || route).trim();
         allRouteIds.add(trimmedRoute);
         if (isTramway(trimmedRoute)) {
@@ -156,11 +158,8 @@ export const formatTweetFromAlertGroup = (alerts: Alert[]): string => {
     if (aIsTram && !bIsTram) return -1;
     if (!aIsTram && bIsTram) return 1;
 
-    // Extract numeric parts for comparison
-    const aNumeric = parseInt(a.replace(/^[A-Za-z\-]+/, ""), 10);
-    const bNumeric = parseInt(b.replace(/^[A-Za-z\-]+/, ""), 10);
-
-    return aNumeric - bNumeric;
+    // Lettered routes are valid; comparing NaN left their order arbitrary.
+    return a.localeCompare(b, "fr", { numeric: true, sensitivity: "base" });
   });
 
   // Get start time from the first alert (they should be sorted by time)
@@ -275,6 +274,7 @@ export const postToTwitter = async (): Promise<PostingResult> => {
 
     // Regrouper par en-tête
     const groupedAlerts = groupAlertsByHeader(unpostedAlerts);
+    const knownRouteIds = await getKnownAlertRouteIds();
     publisher = createTextPublisher();
     console.log(
       `Grouped into ${Object.keys(groupedAlerts).length} distinct alert headers`
@@ -287,7 +287,7 @@ export const postToTwitter = async (): Promise<PostingResult> => {
       let stopBatch = false;
 
       try {
-        const tweetContent = formatTweetFromAlertGroup(alertGroup);
+        const tweetContent = formatTweetFromAlertGroup(alertGroup, knownRouteIds);
         // Persister le marqueur AVANT l'envoi : un crash ou une panne DB après
         // acceptation par X ne doit jamais libérer automatiquement ce groupe.
         const prepared = await preparePublicationGroup(prisma, groupAlertIds, claimedAt);
@@ -319,6 +319,10 @@ export const postToTwitter = async (): Promise<PostingResult> => {
             messages.push("Publication incertaine : vérifier le compte avant de libérer cette alerte en base.");
           }
           errors.push(result.error);
+          console.warn("Publication X interrompue:", {
+            code: result.error.code, status: result.error.status,
+            stage: result.error.stage, uncertain: result.error.uncertain === true,
+          });
 
           // Une limite de quota ou un problème d'authentification concerne
           // tout le compte : ne pas multiplier les appels refusés dans ce lot.

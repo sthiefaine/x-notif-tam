@@ -4,14 +4,17 @@ import { useEffect, useRef, useState } from "react";
 import * as maplibregl from "maplibre-gl";
 import type { GeoJSONSource, Map as LibreMap } from "maplibre-gl";
 import type { FeatureCollection } from "geojson";
-import type { LiveAlert, LiveVehicle } from "@/lib/transit/live-types";
+import type { LiveAlert, LiveArrival, LiveVehicle } from "@/lib/transit/live-types";
 import type { TransitNetwork, TransitStop } from "@/lib/transit/types";
 import { affectedLineFeatures, freshVehicle, isTram, longStop, safeColor, vehicleAge } from "./transit-state";
+import { describeVehicle, nextTripDelays } from "./transit-vehicle-state";
 import "maplibre-gl/dist/maplibre-gl.css";
 
 type Props = {
   network: TransitNetwork | null;
   vehicles: LiveVehicle[];
+  arrivals: LiveArrival[];
+  importantRouteIds: string[];
   alerts: LiveAlert[];
   selectedRouteId: string | null;
   selectedStop: TransitStop | null;
@@ -21,7 +24,10 @@ type Props = {
   now: number;
   userLocation: { lat: number; lon: number } | null;
   onStopSelect: (id: string) => void;
+  onRouteSelect: (id: string) => void;
   onVehicleSelect: (id: string) => void;
+  onAlertSelect: (id: string) => void;
+  onOverviewChange: (overview: boolean) => void;
   onError: () => void;
 };
 
@@ -44,7 +50,7 @@ function boundsFor(network: TransitNetwork, routeId: string | null) {
 }
 
 function addLayers(map: LibreMap) {
-  for (const id of ["tam-lines", "tam-stops", "tam-vehicles", "tam-affected", "tam-location"]) map.addSource(id, { type: "geojson", data: empty });
+  for (const id of ["tam-lines", "tam-stops", "tam-vehicles", "tam-affected", "tam-location", "tam-alerts"]) map.addSource(id, { type: "geojson", data: empty });
   const canvas = document.createElement("canvas");
   canvas.width = 16;
   canvas.height = 16;
@@ -57,8 +63,13 @@ function addLayers(map: LibreMap) {
     }
     map.addImage("tam-work-hatch", context.getImageData(0, 0, 16, 16));
   }
-  map.addLayer({ id: "tam-line-casing", type: "line", source: "tam-lines", layout: { "line-join": "round", "line-cap": "round" }, paint: { "line-color": "#ffffff", "line-width": ["interpolate", ["linear"], ["zoom"], 10, 4, 15, 9], "line-opacity": 0.95 } });
-  map.addLayer({ id: "tam-line-color", type: "line", source: "tam-lines", layout: { "line-join": "round", "line-cap": "round" }, paint: { "line-color": ["get", "color"], "line-width": ["interpolate", ["linear"], ["zoom"], 10, 2.5, 15, 6] } });
+  // Buses form a quieter base; trams remain above them at every zoom level.
+  for (const tram of [false, true]) {
+    const kind = tram ? "tram" : "bus";
+    map.addLayer({ id: `tam-${kind}-casing`, type: "line", source: "tam-lines", filter: ["==", ["get", "isTram"], tram], layout: { "line-join": "round", "line-cap": "round" }, paint: { "line-color": "#ffffff", "line-width": ["interpolate", ["linear"], ["zoom"], 10, tram ? 6 : 2.6, 15, tram ? 10 : 5.5], "line-opacity": tram ? 0.95 : 0.4 } });
+    map.addLayer({ id: `tam-${kind}-hit`, type: "line", source: "tam-lines", filter: ["==", ["get", "isTram"], tram], paint: { "line-width": 12, "line-opacity": 0 } });
+    map.addLayer({ id: `tam-${kind}-color`, type: "line", source: "tam-lines", filter: ["==", ["get", "isTram"], tram], layout: { "line-join": "round", "line-cap": "round" }, paint: { "line-color": ["get", "color"], "line-width": ["interpolate", ["linear"], ["zoom"], 10, tram ? 3.5 : 1.3, 15, tram ? 6 : 3], "line-opacity": tram ? 0.95 : 0.42 } });
+  }
   map.addLayer({ id: "tam-work-underlay", type: "line", source: "tam-affected", filter: ["==", ["get", "category"], "works"], layout: { "line-join": "round", "line-cap": "round" }, paint: { "line-color": ["get", "color"], "line-width": 9 } });
   if (context) map.addLayer({ id: "tam-work-pattern", type: "line", source: "tam-affected", filter: ["==", ["get", "category"], "works"], paint: { "line-pattern": "tam-work-hatch", "line-width": 9 } });
   map.addLayer({ id: "tam-no-service-casing", type: "line", source: "tam-affected", filter: ["==", ["get", "category"], "no_service"], paint: { "line-color": "#252b34", "line-width": 10 } });
@@ -67,10 +78,14 @@ function addLayers(map: LibreMap) {
   map.addLayer({ id: "tam-stop-hit", type: "circle", source: "tam-stops", minzoom: 12, paint: { "circle-radius": 12, "circle-opacity": 0 } });
   map.addLayer({ id: "tam-stop-selected", type: "circle", source: "tam-stops", filter: ["==", ["get", "id"], ""], paint: { "circle-radius": 9, "circle-color": "#ffffff", "circle-stroke-color": "#153768", "circle-stroke-width": 3 } });
   map.addLayer({ id: "tam-stop-label", type: "symbol", source: "tam-stops", minzoom: 15, layout: { "text-field": ["get", "name"], "text-font": ["Noto Sans Regular"], "text-size": 11, "text-offset": [0, 1.1], "text-anchor": "top", "text-max-width": 12 }, paint: { "text-color": "#33445a", "text-halo-color": "#ffffff", "text-halo-width": 2 } });
-  map.addLayer({ id: "tam-long-stop", type: "circle", source: "tam-vehicles", filter: ["==", ["get", "longStop"], true], paint: { "circle-radius": 17, "circle-color": "#e3d5f5", "circle-opacity": 0.9, "circle-stroke-color": "#7d5aa2", "circle-stroke-width": 2 } });
+  map.addLayer({ id: "tam-long-stop", type: "circle", source: "tam-vehicles", filter: ["==", ["get", "attention"], true], paint: { "circle-radius": 17, "circle-color": ["get", "stateColor"], "circle-opacity": 0.2, "circle-stroke-color": ["get", "stateColor"], "circle-stroke-width": 2 } });
   map.addLayer({ id: "tam-vehicle-circles", type: "circle", source: "tam-vehicles", paint: { "circle-radius": ["case", ["==", ["get", "selected"], true], 11, 8.5], "circle-color": ["case", ["==", ["get", "fresh"], true], ["get", "color"], "#8793a2"], "circle-stroke-width": 2.5, "circle-stroke-color": "#ffffff", "circle-opacity": ["case", ["==", ["get", "fresh"], true], 1, 0.7] } });
-  map.addLayer({ id: "tam-vehicle-direction", type: "symbol", source: "tam-vehicles", layout: { "text-field": "▲", "text-font": ["Noto Sans Regular"], "text-size": 11, "text-rotate": ["coalesce", ["get", "bearing"], 0], "text-rotation-alignment": "map", "text-allow-overlap": true, "text-ignore-placement": true }, paint: { "text-color": ["get", "textColor"] } });
+  map.addLayer({ id: "tam-vehicle-direction", type: "symbol", source: "tam-vehicles", layout: { "text-field": ["case", ["==", ["get", "state"], "at_stop"], "●", "▲"], "text-font": ["Noto Sans Regular"], "text-size": 11, "text-rotate": ["coalesce", ["get", "bearing"], 0], "text-rotation-alignment": "map", "text-allow-overlap": true, "text-ignore-placement": true }, paint: { "text-color": ["get", "textColor"] } });
   map.addLayer({ id: "tam-vehicle-hit", type: "circle", source: "tam-vehicles", paint: { "circle-radius": 16, "circle-opacity": 0 } });
+  map.addLayer({ id: "tam-alert-halo", type: "circle", source: "tam-alerts", paint: { "circle-radius": 16, "circle-color": ["get", "color"], "circle-stroke-color": "#ffffff", "circle-stroke-width": 3 } });
+  map.addLayer({ id: "tam-alert-symbol", type: "symbol", source: "tam-alerts", layout: { "text-field": "!", "text-font": ["Noto Sans Bold"], "text-size": 21, "text-allow-overlap": true, "text-ignore-placement": true }, paint: { "text-color": "#ffffff" } });
+  map.addLayer({ id: "tam-alert-label", type: "symbol", source: "tam-alerts", layout: { "text-field": ["get", "routeName"], "text-font": ["Noto Sans Bold"], "text-size": 13, "text-offset": [1.6, 0], "text-anchor": "left", "text-allow-overlap": true, "text-ignore-placement": true }, paint: { "text-color": "#73521c", "text-halo-color": "#ffffff", "text-halo-width": 3 } });
+  map.addLayer({ id: "tam-alert-hit", type: "circle", source: "tam-alerts", paint: { "circle-radius": 23, "circle-opacity": 0 } });
   map.addLayer({ id: "tam-location-halo", type: "circle", source: "tam-location", paint: { "circle-radius": 15, "circle-color": "#2458bd", "circle-opacity": 0.12 } });
   map.addLayer({ id: "tam-location-dot", type: "circle", source: "tam-location", paint: { "circle-radius": 6, "circle-color": "#2458bd", "circle-stroke-color": "#ffffff", "circle-stroke-width": 2 } });
 }
@@ -81,12 +96,16 @@ export default function TransitMap(props: Props) {
   const callbacks = useRef(props);
   const initialFit = useRef(false);
   const lastRoute = useRef<string | null>(null);
+  const detailRef = useRef<(() => void) | null>(null);
+  const overviewRef = useRef<boolean | null>(null);
   const [ready, setReady] = useState(false);
   const [mapMessage, setMapMessage] = useState<string | null>(null);
   useEffect(() => { callbacks.current = props; });
 
   useEffect(() => {
     if (!container.current) return;
+    setReady(false);
+    initialFit.current = false; lastRoute.current = null; overviewRef.current = null;
     let disposed = false;
     let map: LibreMap | undefined;
     let resizeObserver: ResizeObserver | undefined;
@@ -106,17 +125,35 @@ export default function TransitMap(props: Props) {
           locale: { "NavigationControl.ZoomIn": "Zoomer", "NavigationControl.ZoomOut": "Dézoomer" },
         });
         mapRef.current = map;
-        if (typeof ResizeObserver !== "undefined") { resizeObserver = new ResizeObserver(() => map?.resize()); resizeObserver.observe(container.current); }
+        if (typeof ResizeObserver !== "undefined") { resizeObserver = new ResizeObserver(() => { map?.resize(); detailRef.current?.(); }); resizeObserver.observe(container.current); }
         map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "top-right");
         map.addControl(new maplibregl.AttributionControl({ compact: true, customAttribution: 'Fond : <a href="https://openfreemap.org/" target="_blank" rel="noopener noreferrer">OpenFreeMap</a> · <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">© OpenStreetMap</a> · <a href="https://openmaptiles.org/" target="_blank" rel="noopener noreferrer">OpenMapTiles</a>' }), "bottom-right");
         map.on("style.load", () => {
           if (disposed || !map) return;
           addLayers(map);
+          const updateDetail = () => {
+            if (!map) return;
+            const overview = map.getZoom() < (window.matchMedia("(max-width: 700px)").matches ? 12.2 : 11.2);
+            const visible: maplibregl.FilterSpecification | null = overview ? ["any", ["==", ["get", "isTram"], true], ["==", ["get", "important"], true]] : null;
+            for (const layer of ["tam-vehicle-circles", "tam-vehicle-direction", "tam-vehicle-hit"]) map.setFilter(layer, visible);
+            map.setFilter("tam-long-stop", visible ? ["all", ["==", ["get", "attention"], true], visible] : ["==", ["get", "attention"], true]);
+            container.current?.setAttribute("data-vehicle-detail", overview ? "overview" : "full");
+            if (overviewRef.current !== overview) { overviewRef.current = overview; callbacks.current.onOverviewChange(overview); }
+          };
+          detailRef.current = updateDetail;
+          map.on("zoomend", updateDetail);
+          updateDetail();
           setReady(true);
           setMapMessage(null);
-          map.on("click", "tam-stop-hit", (event) => { if (map?.queryRenderedFeatures(event.point, { layers: ["tam-vehicle-hit"] }).length) return; const id = event.features?.[0]?.properties.id; if (id) callbacks.current.onStopSelect(String(id)); });
+          for (const layer of ["tam-bus-hit", "tam-tram-hit"]) map.on("click", layer, (event) => {
+            if (map?.queryRenderedFeatures(event.point, { layers: ["tam-stop-hit", "tam-vehicle-hit", "tam-alert-hit"] }).length) return;
+            const id = event.features?.[0]?.properties.routeId;
+            if (id) callbacks.current.onRouteSelect(String(id));
+          });
+          map.on("click", "tam-stop-hit", (event) => { if (map?.queryRenderedFeatures(event.point, { layers: ["tam-vehicle-hit", "tam-alert-hit"] }).length) return; const id = event.features?.[0]?.properties.id; if (id) callbacks.current.onStopSelect(String(id)); });
           map.on("click", "tam-vehicle-hit", (event) => { const id = event.features?.[0]?.properties.id; if (id) callbacks.current.onVehicleSelect(String(id)); });
-          for (const layer of ["tam-stop-hit", "tam-vehicle-hit"]) {
+          map.on("click", "tam-alert-hit", (event) => { const id = event.features?.[0]?.properties.alertId; if (id) callbacks.current.onAlertSelect(String(id)); });
+          for (const layer of ["tam-bus-hit", "tam-tram-hit", "tam-stop-hit", "tam-vehicle-hit", "tam-alert-hit"]) {
             map.on("mouseenter", layer, () => { if (map) map.getCanvas().style.cursor = "pointer"; });
             map.on("mouseleave", layer, () => { if (map) map.getCanvas().style.cursor = ""; });
           }
@@ -128,13 +165,14 @@ export default function TransitMap(props: Props) {
       }
     };
     void initialize();
-    return () => { disposed = true; resizeObserver?.disconnect(); mapRef.current = null; map?.remove(); };
+    return () => { disposed = true; resizeObserver?.disconnect(); detailRef.current = null; mapRef.current = null; map?.remove(); };
   }, []);
 
   useEffect(() => {
     const map = mapRef.current;
-    if (!ready || !map || !props.network) return;
-    source(map, "tam-lines")?.setData(props.network.lineFeatures);
+    if (!ready || !map || !map.getLayer("tam-tram-color") || !props.network) return;
+    const routes = new Map(props.network.routes.map((route) => [route.id, route]));
+    source(map, "tam-lines")?.setData({ ...props.network.lineFeatures, features: props.network.lineFeatures.features.map((feature) => ({ ...feature, properties: { ...feature.properties, isTram: routes.has(feature.properties.routeId) && isTram(routes.get(feature.properties.routeId)!) } })) });
     source(map, "tam-stops")?.setData({ type: "FeatureCollection", features: props.network.stops.map((stop) => ({ type: "Feature", id: stop.id, properties: { id: stop.id, name: stop.name, routeKeys: `|${stop.routeIds.join("|")}|` }, geometry: { type: "Point", coordinates: [stop.lon, stop.lat] } })) });
     if (!initialFit.current) {
       initialFit.current = true;
@@ -145,10 +183,14 @@ export default function TransitMap(props: Props) {
 
   useEffect(() => {
     const map = mapRef.current;
-    if (!ready || !map) return;
+    if (!ready || !map || !map.getLayer("tam-tram-color")) return;
     const id = props.selectedRouteId;
-    map.setPaintProperty("tam-line-color", "line-opacity", id ? ["case", ["==", ["get", "routeId"], id], 1, 0.15] : 0.85);
-    map.setPaintProperty("tam-line-casing", "line-opacity", id ? ["case", ["==", ["get", "routeId"], id], 1, 0.2] : 0.75);
+    for (const tram of [false, true]) {
+      const kind = tram ? "tram" : "bus";
+      map.setPaintProperty(`tam-${kind}-color`, "line-opacity", id ? ["case", ["==", ["get", "routeId"], id], 1, tram ? 0.22 : 0.12] : tram ? 0.98 : props.mode === "bus" ? 0.8 : 0.36);
+      map.setPaintProperty(`tam-${kind}-casing`, "line-opacity", id ? ["case", ["==", ["get", "routeId"], id], 1, tram ? 0.4 : 0.1] : tram ? 0.95 : 0.35);
+      map.setPaintProperty(`tam-${kind}-color`, "line-width", ["interpolate", ["linear"], ["zoom"], 10, id ? ["case", ["==", ["get", "routeId"], id], 4, tram ? 3.5 : 1.3] : tram ? 3.5 : 1.3, 15, id ? ["case", ["==", ["get", "routeId"], id], 7, tram ? 6 : 3] : tram ? 6 : 3]);
+    }
     const routeIds = props.network?.routes.filter((route) => props.mode === "all" || (props.mode === "tram") === isTram(route)).map((route) => route.id) || [];
     const stopFilter = id ? ["in", `|${id}|`, ["get", "routeKeys"]] : props.mode !== "all" ? ["any", ...routeIds.map((routeId) => ["in", `|${routeId}|`, ["get", "routeKeys"]])] : null;
     for (const layer of ["tam-stop-dots", "tam-stop-hit", "tam-stop-label"]) map.setFilter(layer, stopFilter as maplibregl.FilterSpecification | null);
@@ -157,9 +199,12 @@ export default function TransitMap(props: Props) {
     const filters: maplibregl.ExpressionSpecification[] = [];
     if (props.mode !== "all") filters.push(["in", ["get", "routeId"], ["literal", routeIds]]);
     if (props.direction !== null) filters.push(["any", ["!", ["has", "direction"]], ["==", ["get", "direction"], props.direction]]);
-    const lineFilter: maplibregl.FilterSpecification | null = filters.length ? ["all", ...filters] : null;
-    map.setFilter("tam-line-color", lineFilter);
-    map.setFilter("tam-line-casing", lineFilter);
+    for (const tram of [false, true]) {
+      const lineFilter: maplibregl.FilterSpecification = ["all", ["==", ["get", "isTram"], tram], ...filters];
+      map.setFilter(`tam-${tram ? "tram" : "bus"}-hit`, lineFilter);
+      map.setFilter(`tam-${tram ? "tram" : "bus"}-color`, lineFilter);
+      map.setFilter(`tam-${tram ? "tram" : "bus"}-casing`, lineFilter);
+    }
     if (id && id !== lastRoute.current && props.network) {
       const bounds = boundsFor(props.network, id);
       if (!bounds.isEmpty()) map.fitBounds(bounds, { padding: 45, maxZoom: 14.5, duration: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : 600 });
@@ -169,32 +214,38 @@ export default function TransitMap(props: Props) {
 
   useEffect(() => {
     const map = mapRef.current;
-    if (!ready || !map) return;
+    if (!ready || !map || !map.getLayer("tam-tram-color")) return;
     const routeMap = new Map(props.network?.routes.map((route) => [route.id, route]));
+    const stops = new Map(props.network?.stops.map((stop) => [stop.id, stop]));
+    const delays = nextTripDelays(props.arrivals, props.now);
+    const important = new Set(props.importantRouteIds);
     source(map, "tam-vehicles")?.setData({ type: "FeatureCollection", features: props.vehicles.map((vehicle) => {
       const route = routeMap.get(vehicle.routeId);
-      return { type: "Feature", id: vehicle.id, properties: { id: vehicle.id, color: safeColor(route?.color), textColor: safeColor(route?.textColor, "#ffffff"), bearing: vehicle.bearing ?? 0, fresh: freshVehicle(vehicle, props.now), longStop: longStop(vehicle, props.now), selected: vehicle.id === props.selectedVehicleId, age: vehicleAge(vehicle, props.now) }, geometry: { type: "Point", coordinates: [vehicle.lon, vehicle.lat] } };
+      const state = describeVehicle(vehicle, props.now, vehicle.stopId ? stops.get(vehicle.stopId) : undefined, vehicle.tripId ? delays.get(vehicle.tripId) : undefined);
+      return { type: "Feature", id: vehicle.id, properties: { id: vehicle.id, isTram: Boolean(route && isTram(route)), important: important.has(vehicle.routeId) || route?.shortName === "A" || state.attention || vehicle.id === props.selectedVehicleId, state: state.kind, stateColor: state.color, attention: state.attention, color: safeColor(route?.color), textColor: safeColor(route?.textColor, "#ffffff"), bearing: vehicle.bearing ?? 0, fresh: freshVehicle(vehicle, props.now), longStop: longStop(vehicle, props.now), selected: vehicle.id === props.selectedVehicleId, age: vehicleAge(vehicle, props.now) }, geometry: { type: "Point", coordinates: [vehicle.lon, vehicle.lat] } };
     }) });
-  }, [ready, props.network, props.vehicles, props.now, props.selectedVehicleId]);
+  }, [ready, props.network, props.vehicles, props.arrivals, props.importantRouteIds, props.now, props.selectedVehicleId]);
 
   useEffect(() => {
     const map = mapRef.current;
-    if (!ready || !map || !props.network) return;
+    if (!ready || !map || !map.getLayer("tam-tram-color") || !props.network) return;
     const allowedRouteIds = new Set(props.network.routes.filter((route) => props.mode === "all" || (props.mode === "tram") === isTram(route)).map((route) => route.id));
     const alerts = props.alerts.filter((alert) => (alert.routeIds.length === 0 || alert.routeIds.some((id) => allowedRouteIds.has(id))) && (!props.selectedRouteId || alert.routeIds.length === 0 || alert.routeIds.includes(props.selectedRouteId)));
     source(map, "tam-affected")?.setData({ type: "FeatureCollection", features: affectedLineFeatures(props.network, alerts, props.now) });
+    const routeMap = new Map(props.network.routes.map((route) => [route.id, route]));
+    source(map, "tam-alerts")?.setData({ type: "FeatureCollection", features: alerts.filter((alert) => !alert.periods.length || alert.periods.some((p) => (!p.start || Date.parse(p.start) <= props.now) && (!p.end || props.now < Date.parse(p.end)))).flatMap((alert) => (alert.mapAnchors || []).map((anchor, index) => ({ type: "Feature" as const, id: `${alert.id}:${index}`, properties: { alertId: alert.id, routeName: anchor.routeId ? routeMap.get(anchor.routeId)?.shortName || anchor.routeId : "!", color: alert.category === "no_service" ? "#cf3f4d" : alert.category === "works" ? "#caa126" : "#ce8324", reference: anchor.kind === "route_reference" }, geometry: { type: "Point" as const, coordinates: [anchor.lon, anchor.lat] } }))) });
   }, [ready, props.network, props.alerts, props.selectedRouteId, props.now, props.mode]);
 
   useEffect(() => {
     const map = mapRef.current;
-    if (!ready || !map) return;
+    if (!ready || !map || !map.getLayer("tam-tram-color")) return;
     map.setFilter("tam-stop-selected", ["==", ["get", "id"], props.selectedStop?.id || ""]);
     if (props.selectedStop) map.easeTo({ center: [props.selectedStop.lon, props.selectedStop.lat], zoom: Math.max(map.getZoom(), 15.2), duration: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : 500 });
   }, [ready, props.selectedStop]);
 
   useEffect(() => {
     const map = mapRef.current;
-    if (!ready || !map) return;
+    if (!ready || !map || !map.getLayer("tam-tram-color")) return;
     if (!props.userLocation) { source(map, "tam-location")?.setData(empty); return; }
     source(map, "tam-location")?.setData({ type: "FeatureCollection", features: [{ type: "Feature", properties: {}, geometry: { type: "Point", coordinates: [props.userLocation.lon, props.userLocation.lat] } }] });
     map.easeTo({ center: [props.userLocation.lon, props.userLocation.lat], zoom: 14, duration: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : 600 });

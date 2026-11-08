@@ -46,6 +46,15 @@ export type TransitLineFeature = {
   };
 };
 
+export type TransitRoutePattern = {
+  id: string;
+  routeId: string;
+  directionId: number | null;
+  /** Ordered occurrences, including repeated stops on loops. No timetable. */
+  stopIds: string[];
+  stopSequences: number[];
+};
+
 export type TransitNetwork = {
   metadata: {
     version: string;
@@ -68,6 +77,7 @@ export type TransitNetwork = {
   routes: TransitRoute[];
   stops: TransitStop[];
   lineFeatures: { type: "FeatureCollection"; features: TransitLineFeature[] };
+  routePatterns?: TransitRoutePattern[];
 };
 
 export type TransitTrip = {

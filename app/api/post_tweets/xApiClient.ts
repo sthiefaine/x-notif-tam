@@ -53,6 +53,7 @@ export type XApiError = {
   detail: string;
   retryAfter?: number;
   uncertain?: boolean;
+  stage?: string;
 };
 
 const asRecord = (value: unknown): Record<string, unknown> =>

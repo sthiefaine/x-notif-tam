@@ -28,6 +28,7 @@ export interface ProlongedStopObservation {
 export interface LiveVehicle {
   id: string;
   routeId: string;
+  rawRouteId?: string;
   routeKnown: boolean;
   tripId?: string;
   tripKnown: boolean;
@@ -38,6 +39,10 @@ export interface LiveVehicle {
   lat: number;
   lon: number;
   bearing?: number;
+  /** Producer value only; GTFS ignores it when stopSequence is absent. */
+  currentStatus?: "STOPPED_AT" | "IN_TRANSIT_TO" | "INCOMING_AT";
+  /** Measured producer speed in m/s; consumers must reject implausible values. */
+  speedMps?: number;
   timestamp: string;
   ageSeconds: number;
   freshness: "fresh" | "stale";
@@ -47,6 +52,7 @@ export interface LiveArrival {
   id: string;
   stopId: string;
   routeId: string;
+  rawRouteId?: string;
   tripId: string;
   headsign?: string;
   arrivalTime?: string;
@@ -60,6 +66,9 @@ export interface LiveArrival {
 export interface LiveAlert {
   id: string;
   routeIds: string[];
+  /** Original producer selectors, retained when a commercial route is resolved. */
+  rawRouteIds?: string[];
+  routeAssociation?: "selector" | "producer_text" | "unresolved";
   stopIds: string[];
   header: string;
   description: string;
@@ -71,6 +80,15 @@ export interface LiveAlert {
   category: "no_service" | "works" | "other";
   classificationSource: "producer" | "keywords";
   geometry?: TransitLineFeature["geometry"];
+  /** A route_reference is a display reference, never the incident's location. */
+  mapAnchors?: {
+    kind: "affected_stop" | "route_reference";
+    routeId?: string;
+    stopId: string;
+    lat: number;
+    lon: number;
+    label: string;
+  }[];
   active?: boolean;
 }
 export interface TransitLiveSnapshot {

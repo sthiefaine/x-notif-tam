@@ -7,6 +7,7 @@ import {
 } from "@/helpers/incident";
 import crypto from "crypto";
 import { postToTwitter } from "@/app/api/post_tweets/postTweet";
+import { getKnownAlertRouteIds, normalizeBotRouteIds } from "@/app/api/post_tweets/alertRoutes";
 
 // TaM diffuse désormais les alertes urbaines et suburbaines dans un flux commun.
 // Les anciens chemins data.montpellier3m.fr/GTFS/{Urbain,Suburbain} sont retirés.
@@ -104,7 +105,7 @@ async function parseAlertFile(buffer: Buffer): Promise<any> {
   }
 }
 
-async function saveAlerts(feedMessage: any): Promise<number> {
+async function saveAlerts(feedMessage: any, knownRouteIds?: ReadonlySet<string>): Promise<number> {
   try {
     if (!feedMessage.entity || !Array.isArray(feedMessage.entity)) {
       console.log(feedMessage);
@@ -130,11 +131,11 @@ async function saveAlerts(feedMessage: any): Promise<number> {
     }
 
     for (const entity of regularAlerts) {
-      await processAlert(entity);
+      await processAlert(entity, knownRouteIds);
     }
 
     for (const entity of complementAlerts) {
-      await processComplement(entity);
+      await processComplement(entity, knownRouteIds);
     }
 
     console.log(
@@ -157,7 +158,7 @@ function generateUniqueAlertId(entity: any): string {
   return `${entity.id}_${hash}`;
 }
 
-async function processAlert(entity: any): Promise<void> {
+async function processAlert(entity: any, knownRouteIds?: ReadonlySet<string>): Promise<void> {
   const alert = entity.alert;
 
   if (!alert.descriptionText?.translation?.[0]?.text) {
@@ -178,18 +179,15 @@ async function processAlert(entity: any): Promise<void> {
       : null;
 
   const informedEntities = alert.informedEntity || [];
-  const routeIds = informedEntities
-    .filter((entity: any) => entity.routeId)
-    .map((entity: any) => entity.routeId)
-    .join(",");
+  const headerText = alert.headerText?.translation?.[0]?.text || "";
+  const descriptionText = alert.descriptionText?.translation?.[0]?.text || "";
+  const routeIds = normalizeBotRouteIds(extractRouteIds(informedEntities), `${headerText} ${descriptionText}`, knownRouteIds).join(",");
 
   const stopIds = informedEntities
     .filter((entity: any) => entity.stopId)
     .map((entity: any) => entity.stopId)
     .join(",");
 
-  const headerText = alert.headerText?.translation?.[0]?.text || "";
-  const descriptionText = alert.descriptionText?.translation?.[0]?.text || "";
   const url = alert.url?.translation?.[0]?.text || "";
 
   const cause =
@@ -233,16 +231,16 @@ async function processAlert(entity: any): Promise<void> {
 async function processComplement(entity: {
   alert: any;
   id: any;
-}): Promise<void> {
+}, knownRouteIds?: ReadonlySet<string>): Promise<void> {
   const alert = entity.alert;
 
   const headerText = alert.headerText?.translation?.[0]?.text || "";
   const descriptionText = alert.descriptionText?.translation?.[0]?.text || "";
-  const routeIds = extractRouteIds(alert.informedEntity);
+  const routeIds = normalizeBotRouteIds(extractRouteIds(alert.informedEntity), `${headerText} ${descriptionText}`, knownRouteIds);
 
   if (routeIds.length === 0) {
     console.warn(`Complément d'information sans route spécifiée: ${entity.id}`);
-    await processAlert(entity);
+    await processAlert(entity, knownRouteIds);
     return;
   }
 
@@ -256,9 +254,12 @@ async function processComplement(entity: {
     where: {
       AND: [
         {
-          OR: routeIds.map((routeId) => ({
-            routeIds: { contains: routeId },
-          })),
+          OR: routeIds.flatMap((routeId) => [
+            { routeIds: routeId },
+            { routeIds: { startsWith: `${routeId},` } },
+            { routeIds: { endsWith: `,${routeId}` } },
+            { routeIds: { contains: `,${routeId},` } },
+          ]),
         },
         {
           timeStart: { lte: timeStart },
@@ -274,7 +275,7 @@ async function processComplement(entity: {
     console.log(
       `Aucune alerte parent trouvée pour le complément ${entity.id}, traitement comme alerte indépendante`
     );
-    await processAlert(entity);
+    await processAlert(entity, knownRouteIds);
     return;
   }
 
@@ -430,6 +431,7 @@ export async function fetchAndProcessAlerts(): Promise<AlertCollectionResult> {
     await ensurePrismaConnection();
 
     const feeds: AlertFeedResult[] = [];
+    const knownRouteIds = await getKnownAlertRouteIds();
 
     // Un flux en échec n'empêche pas le traitement des autres, mais son erreur
     // reste visible dans le bilan et dans le statut HTTP de la tâche.
@@ -437,7 +439,7 @@ export async function fetchAndProcessAlerts(): Promise<AlertCollectionResult> {
       try {
         const alertBuffer = await downloadAlertFile(url);
         const feedMessage = await parseAlertFile(alertBuffer);
-        const processedEntities = await saveAlerts(feedMessage);
+        const processedEntities = await saveAlerts(feedMessage, knownRouteIds);
         feeds.push({ url, success: true, processedEntities });
       } catch (feedError) {
         console.error(`Erreur sur le feed ${url}:`, feedError);

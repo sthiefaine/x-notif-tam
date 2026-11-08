@@ -1,6 +1,7 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const { loadTypeScript } = require("./helpers/load-typescript.cjs");
+const { loadBotAlertRoutes } = require("./helpers/bot-alert-routes.cjs");
 const env = { DATABASE_URL: "postgresql://fake.invalid/not-used" };
 
 function fixture(status) {
@@ -33,7 +34,7 @@ for (const status of ["CONFIRMED", "UNCERTAIN"]) {
     const { db, ledger, alert } = fixture(status);
     let sends = 0;
     const posting = loadTypeScript("app/api/post_tweets/postTweet.ts", { env,
-      mocks: { "@/lib/prisma": { prisma: db }, "@/lib/transit/publication-ledger": ledger,
+      mocks: { "./alertRoutes": loadBotAlertRoutes(), "@/lib/prisma": { prisma: db }, "@/lib/transit/publication-ledger": ledger,
         "./publisher": { getPublisherConfiguration: () => ({ mode: "browser", configured: true }),
           createTextPublisher: () => ({ postText: async () => { sends++; throw new Error("must not send"); }, close: async () => {} }) } },
     });

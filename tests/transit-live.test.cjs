@@ -111,6 +111,26 @@ test("missing entity timestamps cannot inherit a fresh header timestamp", async 
   h.collector.stop();
 });
 
+test("vehicle status and speed are preserved only when explicitly supplied and structurally valid", () => {
+  const { network, lookup } = fixtureNetwork();
+  const explicit = realtime.normalizeVehicles(feed(baseTime, [vehicleEntity(baseTime, {
+    currentStatus: 0, position: { latitude: 43.6, longitude: 3.802, speed: 0 },
+  })]), network, lookup, baseTime).records[0].vehicle;
+  assert.equal(explicit.currentStatus, "INCOMING_AT");
+  assert.equal(explicit.speedMps, 0);
+  const missing = vehicleEntity(baseTime);
+  delete missing.vehicle.currentStatus;
+  delete missing.vehicle.currentStopSequence;
+  const normalized = realtime.normalizeVehicles(feed(baseTime, [missing]), network, lookup, baseTime).records[0].vehicle;
+  assert.equal(normalized.currentStatus, undefined);
+  assert.equal(normalized.speedMps, undefined);
+  const invalid = realtime.normalizeVehicles(feed(baseTime, [vehicleEntity(baseTime, {
+    currentStatus: "UNRECOGNIZED", position: { latitude: 43.6, longitude: 3.802, speed: -1 },
+  })]), network, lookup, baseTime).records[0].vehicle;
+  assert.equal(invalid.currentStatus, undefined);
+  assert.equal(invalid.speedMps, undefined);
+});
+
 test("an unknown trip on a known route stays visible while mismatching trip metadata is never trusted", () => {
   const { network, lookup } = fixtureNetwork();
   const unknown = realtime.normalizeVehicles(feed(baseTime, [vehicleEntity(baseTime, { trip: { tripId: "missing", routeId: "33" } })]), network, lookup, baseTime).records[0];
@@ -122,6 +142,26 @@ test("an unknown trip on a known route stays visible while mismatching trip meta
   assert.equal(mismatch.vehicle.routeId, "other");
   assert.equal(mismatch.vehicle.tripKnown, false);
   assert.equal(mismatch.vehicle.headsign, undefined);
+});
+
+test("an exact GTFS trip resolves an unknown internal route selector for vehicles and arrivals", () => {
+  const { network, lookup } = fixtureNetwork();
+  network.routes.push({ id: "A" });
+  lookup.trips.t.routeId = "A";
+  lookup.patterns.p.routeId = "A";
+  const rawVehicle = vehicleEntity(baseTime, { trip: { tripId: "t", routeId: "61", startDate: "20261108" } });
+  const normalized = realtime.normalizeVehicles(feed(baseTime, [rawVehicle]), network, lookup, baseTime).records[0].vehicle;
+  assert.equal(normalized.routeId, "A");
+  assert.equal(normalized.rawRouteId, "61");
+  assert.equal(normalized.tripKnown, true);
+  assert.equal(normalized.directionId, 0);
+  const rawTrip = tripEntity(baseTime, { trip: { tripId: "t", routeId: "61", startDate: "20261108" } });
+  const prediction = realtime.normalizeArrivals(feed(baseTime, [rawTrip]), network, lookup, baseTime).records[0].arrivals[0];
+  assert.equal(prediction.routeId, "A");
+  assert.equal(prediction.rawRouteId, "61");
+  network.routes.push({ id: "61" });
+  assert.equal(realtime.normalizeVehicles(feed(baseTime, [rawVehicle]), network, lookup, baseTime).records[0].vehicle.tripKnown, false);
+  assert.equal(realtime.normalizeArrivals(feed(baseTime, [rawTrip]), network, lookup, baseTime).records.length, 0);
 });
 
 test("NO_DATA and SKIPPED predictions are absent, and conflicting or unknown stops are rejected", () => {
@@ -287,6 +327,67 @@ test("line 33 works without affected stops are text-only and text alone never im
   const explicit = alerts.normalizeAlerts(feed(baseTime, [{ id: "official", alert: { effect: "NO_SERVICE", informedEntity: [{ routeId: "33" }] } }]), network, lookup)[0];
   assert.equal(explicit.category, "no_service");
   assert.equal(explicit.effect, "NO_SERVICE");
+});
+
+test("unknown internal line selectors resolve only from one explicit known producer line label", () => {
+  const known = new Set(["A", "Amigo", "33", "21", "2"]);
+  assert.equal(alerts.normalizeAlertRouteId("61", "TR/LIGNE A/ ligne a retard sans cause. Des retards sur la ligne A.", known), "A");
+  assert.equal(alerts.normalizeAlertRouteId("unknown", "Ligne Amigo : retards", known), "Amigo");
+  assert.equal(alerts.normalizeAlertRouteId("unknown", "Ligne 21 : retards", known), "21");
+  assert.equal(alerts.normalizeAlertRouteId("33", "Ligne A : retards", known), "33");
+  assert.equal(alerts.normalizeAlertRouteId("61", "Ligne A", new Set(["61", "A"])), "61");
+  assert.equal(alerts.normalizeAlertRouteId("61", "Ligne A"), "61");
+  for (const text of ["Retards sans ligne précisée", "Lignes A et 33", "Ligne A et 33", "Ligne A / 33", "Ligne A et ligne 33", "Ligne inconnue"]) {
+    assert.equal(alerts.normalizeAlertRouteId("61", text, known), "61");
+  }
+});
+
+test("the real line A selector mismatch retains raw IDs and anchors only a labelled route reference", () => {
+  const { network, lookup } = fixtureNetwork();
+  network.routes.push({ id: "A", shortName: "A", geometryAvailable: false });
+  for (const stop of network.stops) stop.routeIds.push("A");
+  lookup.patterns.a = { id: "a", routeId: "A", directionId: 0, stopIds: ["A", "B", "C", "D"], stopSequences: [1, 2, 3, 4] };
+  const result = alerts.normalizeAlerts(feed(baseTime, [{ id: "1052756", alert: {
+    headerText: { translation: [{ text: "    TR/LIGNE A/ ligne a retard sans cause" }] },
+    descriptionText: { translation: [{ text: "Des retards sont annoncés sur la ligne A." }] },
+    informedEntity: [{ routeId: "61" }],
+  } }]), network, lookup)[0];
+  assert.deepEqual(plain(result.rawRouteIds), ["61"]);
+  assert.deepEqual(plain(result.routeIds), ["A"]);
+  assert.equal(result.routeAssociation, "producer_text");
+  assert.equal(result.scope, "line");
+  assert.equal(result.geometry, undefined);
+  assert.equal(result.mapAnchors.length, 1);
+  const anchor = result.mapAnchors[0];
+  assert.equal(anchor.kind, "route_reference");
+  assert.equal(anchor.routeId, "A");
+  assert.equal(anchor.stopId, "B");
+  assert.equal(anchor.lat, network.stops[1].lat);
+  assert.equal(anchor.lon, network.stops[1].lon);
+  assert.equal(anchor.label, "Perturbation sur ligne A · localisation non précisée");
+});
+
+test("multiple unknown selectors never collapse into the one line named in text", () => {
+  const { network, lookup } = fixtureNetwork();
+  network.routes.push({ id: "A", shortName: "A" });
+  const result = alerts.normalizeAlerts(feed(baseTime, [{ id: "ambiguous", alert: {
+    headerText: { translation: [{ text: "Ligne A : information" }] }, informedEntity: [{ routeId: "61" }, { routeId: "62" }],
+  } }]), network, lookup)[0];
+  assert.deepEqual(plain(result.routeIds), ["61", "62"]);
+  assert.equal(result.routeAssociation, "unresolved");
+  assert.deepEqual(plain(result.mapAnchors), []);
+});
+
+test("an explicit informed stop produces an affected-stop anchor while a network notice invents none", () => {
+  const { network, lookup } = fixtureNetwork();
+  const results = alerts.normalizeAlerts(feed(baseTime, [
+    { id: "stop", alert: { informedEntity: [{ routeId: "33", stopId: "C" }] } },
+    { id: "network", alert: { headerText: { translation: [{ text: "Information réseau" }] } } },
+  ]), network, lookup);
+  assert.equal(results[0].mapAnchors[0].kind, "affected_stop");
+  assert.equal(results[0].mapAnchors[0].stopId, "C");
+  assert.equal(results[0].geometry, undefined);
+  assert.deepEqual(plain(results[1].mapAnchors), []);
 });
 
 test("segments require named explicit bounds and a single unambiguous route path", () => {

@@ -400,18 +400,28 @@ export const createBrowserPublisher = async (): Promise<{
       }
       busy = true;
       let submissionStarted = false;
+      let stage = "session";
       try {
         return await withDeadline((async () => {
           await assertSession(page);
+          stage = "account";
           await assertAccount(page);
           await ensureOpen();
+          stage = "composer";
           await page.locator('[data-testid="tweetTextarea_0"]')
             .or(page.getByRole("textbox", { name: /^(Post text|Texte du post|Texte de la publication)$/i }))
             .first().fill(text);
           await assertSession(page);
           await ensureOpen();
+          const submitButton = page.locator('[data-testid="tweetButtonInline"]')
+            .or(page.getByRole("button", { name: /^(Post|Publier)$/i })).first();
+          // Trial checks actionability without clicking or submitting anything.
+          stage = "submit_preflight";
+          await submitButton.click({ trial: true, timeout: 5_000 });
+          await ensureOpen();
 
           // Attendre la confirmation réseau, jamais déduire le succès du clic.
+          stage = "submit";
           const confirmation = page.waitForResponse((response) => {
             const url = new URL(response.url());
             return ["x.com", "api.x.com"].includes(url.hostname) &&
@@ -421,15 +431,15 @@ export const createBrowserPublisher = async (): Promise<{
           // Évite un rejet non géré si le clic échoue avant l'attente ci-dessous.
           void confirmation.catch(() => undefined);
           submissionStarted = true;
-          await page.locator('[data-testid="tweetButtonInline"]')
-            .or(page.getByRole("button", { name: /^(Post|Publier)$/i }))
-            .first().click({ timeout: 5_000 });
+          await submitButton.click({ timeout: 5_000 });
+          stage = "confirmation";
           const id = await getConfirmedTweetId(await confirmation);
           return { success: true as const, message: "Tweet publié via le navigateur", id };
         })(), RUN_TIMEOUT);
       } catch (failure) {
         await close();
         const result = normalizeBrowserFailure(failure);
+        result.error.stage = stage;
         const explicitRefusal = typeof result.error.code === "number" || [
           "SESSION_REQUIRED", "ACCOUNT_CHALLENGE", "BROWSER_RATE_LIMIT", "BROWSER_POST_REJECTED",
         ].includes(String(result.error.code));

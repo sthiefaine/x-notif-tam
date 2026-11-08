@@ -57,3 +57,12 @@ export function nearestStops(network: TransitNetwork, lat: number, lon: number) 
     return { ...stop, distance: 6_371_000 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)) };
   }).sort((a, b) => a.distance - b.distance).slice(0, 6);
 }
+
+/** An elapsed announced period is not a confirmation that service has resumed. */
+export function recentAlertEnd(alert: LiveAlert, now: number): number | null {
+  if (!alert.periods.length || alertActive(alert, now) || alertUpcoming(alert, now)) return null;
+  const ends = alert.periods.map((period) => period.end ? Date.parse(period.end) : NaN);
+  if (ends.some((end) => !Number.isFinite(end))) return null;
+  const end = Math.max(...ends);
+  return now > end && now - end <= 2 * 3600_000 ? end : null;
+}

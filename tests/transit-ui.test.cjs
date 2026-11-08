@@ -36,3 +36,11 @@ test("search tolerates accents and nearby stops are ranked by geographical dista
   assert.equal(ui.nearestStops(network, 43.60001, 3.90001)[0].id, "near");
   assert.equal(ui.safeColor("url(javascript:bad)"), "#2458bd");
 });
+
+test("elapsed periods are kept briefly without claiming service has resumed", () => {
+  const ended = alert({ periods: [{ start: new Date(now - 3600000).toISOString(), end: new Date(now - 60000).toISOString() }] });
+  assert.equal(ui.recentAlertEnd(ended, now), now - 60000);
+  assert.equal(ui.recentAlertEnd(ended, now + 3 * 3600000), null);
+  assert.equal(ui.recentAlertEnd(alert({ periods: [{ start: null, end: null }] }), now), null);
+  assert.equal(ui.recentAlertEnd(alert({ periods: [{ start: new Date(now + 3600000).toISOString(), end: new Date(now + 7200000).toISOString() }] }), now), null);
+});

@@ -40,6 +40,19 @@ const statements = [
     computed_at TIMESTAMPTZ(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     algorithm_version INTEGER NOT NULL DEFAULT 1
   )`,
+  `CREATE TABLE IF NOT EXISTS transit_stop_passages (
+    passage_key TEXT PRIMARY KEY, route_id TEXT NOT NULL, trip_id TEXT NOT NULL,
+    service_date DATE NOT NULL, stop_id TEXT NOT NULL, stop_sequence INTEGER NOT NULL,
+    direction_key TEXT NOT NULL, measured_at TIMESTAMPTZ(3) NOT NULL,
+    continuity_key TEXT NOT NULL, evidence TEXT NOT NULL,
+    captured_at TIMESTAMPTZ(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
+  )`,
+  `CREATE INDEX IF NOT EXISTS transit_stop_passages_measured_at_idx ON transit_stop_passages(measured_at)`,
+  `CREATE INDEX IF NOT EXISTS transit_stop_passages_route_id_measured_at_idx ON transit_stop_passages(route_id, measured_at)`,
+  `CREATE TABLE IF NOT EXISTS transit_headway_minutes (
+    minute TIMESTAMPTZ(3) PRIMARY KEY, healthy BOOLEAN NOT NULL,
+    received INTEGER NOT NULL, eligible INTEGER NOT NULL
+  )`,
   `DO $$ BEGIN
     IF to_regclass('public.alerts') IS NOT NULL THEN
       INSERT INTO publication_ledger (alert_id, status)

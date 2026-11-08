@@ -429,3 +429,31 @@ model TransitWeeklyStat {
 
   @@map("transit_weekly_stats")
 }
+
+// Stop-presence facts are not GPS tracks. Stable keys deduplicate across restarts.
+model TransitStopPassage {
+  passageKey    String   @id @map("passage_key")
+  routeId       String   @map("route_id")
+  tripId        String   @map("trip_id")
+  serviceDate   DateTime @map("service_date") @db.Date
+  stopId        String   @map("stop_id")
+  stopSequence  Int      @map("stop_sequence")
+  directionKey  String   @map("direction_key")
+  measuredAt    DateTime @map("measured_at") @db.Timestamptz(3)
+  continuityKey String   @map("continuity_key")
+  evidence      String
+  capturedAt    DateTime @default(now()) @map("captured_at") @db.Timestamptz(3)
+
+  @@index([measuredAt])
+  @@index([routeId, measuredAt])
+  @@map("transit_stop_passages")
+}
+
+model TransitHeadwayMinute {
+  minute   DateTime @id @db.Timestamptz(3)
+  healthy  Boolean
+  received Int
+  eligible Int
+
+  @@map("transit_headway_minutes")
+}

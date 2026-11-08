@@ -8,6 +8,7 @@ const rateLimits: Record<string, { limit: number; window: number }> = {
   "/api/alerts": { limit: 10, window: 60 },
   "/api/live": { limit: 600, window: 60 },
   "/api/map/network": { limit: 120, window: 60 },
+  "/api/stats/headways": { limit: 120, window: 60 },
   "/api/stats/weekly": { limit: 120, window: 60 },
 };
 

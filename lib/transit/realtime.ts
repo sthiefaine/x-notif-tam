@@ -7,7 +7,7 @@ export interface RealtimeEntity {
   id?: string; isDeleted?: boolean;
   vehicle?: {
     vehicle?: { id?: string }; trip?: RealtimeTrip;
-    position?: { latitude?: number; longitude?: number; bearing?: number };
+    position?: { latitude?: number; longitude?: number; bearing?: number; speed?: number };
     timestamp?: number | string; stopId?: string; currentStopSequence?: number; currentStatus?: string | number;
   };
   tripUpdate?: {
@@ -87,19 +87,28 @@ export function normalizeVehicles(feed: RealtimeFeed, network: TransitNetwork, l
     const timestamp = unixMilliseconds(raw.timestamp);
     if (timestamp === null || isFutureTimestamp(timestamp, now)) { missingTimestampCount++; continue; }
     const descriptor = raw.trip ?? {}, trip = descriptor.tripId ? lookup.trips[descriptor.tripId] : undefined;
-    const routeId = descriptor.routeId || trip?.routeId || "unknown";
-    const tripKnown = Boolean(trip) && (!descriptor.routeId || descriptor.routeId === trip?.routeId);
+    // An exact companion-GTFS trip can resolve an internal producer route ID.
+    // A conflicting ID which is itself a known route is never overwritten.
+    const routeId = descriptor.routeId && routeIds.has(descriptor.routeId) ? descriptor.routeId
+      : trip && routeIds.has(trip.routeId) ? trip.routeId : descriptor.routeId || "unknown";
+    const tripKnown = Boolean(trip) && routeId === trip?.routeId;
     if (!trip) unmatchedTripCount++;
     const iso = new Date(timestamp).toISOString(), age = ageSeconds(iso, now);
+    const explicitStatus = raw.currentStatus === "STOPPED_AT" || raw.currentStatus === 1 ? "STOPPED_AT"
+      : raw.currentStatus === "IN_TRANSIT_TO" || raw.currentStatus === 2 ? "IN_TRANSIT_TO"
+      : raw.currentStatus === "INCOMING_AT" || raw.currentStatus === 0 ? "INCOMING_AT" : undefined;
     if (age > FRESH_SECONDS) staleCount++;
     if (age > HIDE_SECONDS) continue;
     records.push({
       entityId: entity.id, trip: descriptor, currentStatus: raw.currentStatus,
       vehicle: {
         id: raw.vehicle?.id || entity.id, routeId, routeKnown: routeIds.has(routeId), tripId: descriptor.tripId,
+        ...(descriptor.routeId && descriptor.routeId !== routeId ? { rawRouteId: descriptor.routeId } : {}),
         tripKnown, directionId: tripKnown ? trip?.directionId : undefined, headsign: tripKnown ? trip?.headsign : undefined,
         stopId: raw.stopId, stopSequence: Number.isInteger(raw.currentStopSequence) ? raw.currentStopSequence : undefined,
         lat: position.latitude!, lon: position.longitude!, bearing: Number.isFinite(position.bearing) ? position.bearing : undefined,
+        currentStatus: explicitStatus,
+        speedMps: Number.isFinite(position.speed) && position.speed! >= 0 ? position.speed : undefined,
         timestamp: iso, ageSeconds: age, freshness: age <= FRESH_SECONDS ? "fresh" : "stale",
       },
     });
@@ -126,7 +135,7 @@ export function normalizeArrivals(feed: RealtimeFeed, network: TransitNetwork, l
     if (age > HIDE_SECONDS) continue;
     const trip = lookup.trips[descriptor.tripId], routeId = trip?.routeId || descriptor.routeId;
     if (!trip) unmatchedTripCount++;
-    if (!routeId || !knownRoutes.has(routeId) || (descriptor.routeId && trip && descriptor.routeId !== trip.routeId)) continue;
+    if (!routeId || !knownRoutes.has(routeId) || (descriptor.routeId && trip && knownRoutes.has(descriptor.routeId) && descriptor.routeId !== trip.routeId)) continue;
     const pattern = trip ? lookup.patterns[trip.patternId] : undefined;
     const arrivals: LiveArrival[] = [];
     for (const stop of (update.stopTimeUpdate ?? []).slice(0, 500)) {
@@ -146,6 +155,7 @@ export function normalizeArrivals(feed: RealtimeFeed, network: TransitNetwork, l
       if (eventTime === null || eventTime < now - 120_000 || eventTime > now + 3 * 3600_000) continue;
       const delay = stop.arrival?.delay ?? stop.departure?.delay;
       arrivals.push({ id: `${entity.id}:${stop.stopSequence ?? resolvedId}`, stopId: resolvedId, routeId, tripId: descriptor.tripId, headsign: trip?.headsign || undefined,
+        ...(descriptor.routeId && descriptor.routeId !== routeId ? { rawRouteId: descriptor.routeId } : {}),
         arrivalTime: arrival === null ? undefined : new Date(arrival).toISOString(), departureTime: departure === null ? undefined : new Date(departure).toISOString(),
         delay: typeof delay === "number" && Number.isFinite(delay) ? delay : undefined,
         timestamp: new Date(timestamp).toISOString(), ageSeconds: age, freshness: age <= FRESH_SECONDS ? "fresh" : "stale", realtime: true });

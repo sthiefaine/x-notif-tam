@@ -1,6 +1,7 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const { loadTypeScript } = require("./helpers/load-typescript.cjs");
+const { loadBotAlertRoutes } = require("./helpers/bot-alert-routes.cjs");
 
 const configuredEnv = {
   X_POSTING_MODE: "api",
@@ -24,6 +25,7 @@ const noDatabase = new Proxy({}, {
 function loadPosting(prisma, postToX, configured = true, mode = "api") {
   return loadTypeScript("app/api/post_tweets/postTweet.ts", {
     mocks: {
+      "./alertRoutes": loadBotAlertRoutes(),
       "@/lib/prisma": { prisma },
       "@/lib/transit/publication-ledger": loadTypeScript("lib/transit/publication-ledger.ts"),
       "./publisher": {
@@ -43,6 +45,7 @@ function loadRoute(prisma, { configured = true, postToTwitter, env = configuredE
   const formatting = loadPosting(noDatabase);
   return loadTypeScript("app/api/post_tweets/route.ts", {
     mocks: {
+      "./alertRoutes": loadBotAlertRoutes(),
       "next/server": {
         NextResponse: {
           json: (body, options) => new Response(JSON.stringify(body), options),
@@ -84,6 +87,27 @@ function alert(id, headerText = "Incident") {
   };
 }
 
+test("legacy line A identifiers render canonically using the verified source label without mutating stored state", () => {
+  const posting = loadPosting(noDatabase);
+  const existing = { ...alert("legacy-a"), headerText: "    TR/LIGNE A/ ligne a retard sans cause",
+    descriptionText: "Des retards sont annoncés sur la ligne A.", routeIds: "61", isProcessing: true, inProcessSince: null };
+  const tweet = posting.formatTweetFromAlertGroup([existing], new Set(["1", "33", "A", "Amigo"]));
+  assert.match(tweet, /Ligne: A\n/);
+  assert.match(tweet, /#LATaM/);
+  assert.doesNotMatch(tweet, /Ligne: 61|#L61TaM/);
+  assert.equal(existing.routeIds, "61");
+  assert.equal(existing.isProcessing, true);
+  assert.equal(existing.inProcessSince, null);
+});
+
+test("lettered routes sort deterministically and mixed route IDs are never mistaken for tram numbers", () => {
+  const posting = loadPosting(noDatabase);
+  const mixed = posting.formatTweetFromAlertGroup([{ ...alert("mixed"), routeIds: "Amigo,A,12,3,1A" }]);
+  assert.match(mixed, /Lignes: 3-1A-12-A-Amigo\n/);
+  const alphanumeric = posting.formatTweetFromAlertGroup([{ ...alert("1a"), routeIds: "1A" }]);
+  assert.doesNotMatch(alphanumeric, /🚊|🚋/);
+});
+
 test("publication without X credentials never touches the database", async () => {
   const result = await loadPosting(noDatabase, undefined, false).postToTwitter();
   assert.equal(result.success, false);
@@ -119,7 +143,11 @@ test("dryRun only reads and uses the publication date window and batch limit", a
   const prisma = {
     alert: {
       count: async (query) => { queries.push(query); return 1; },
-      findMany: async (query) => { queries.push(query); return [alert("a")]; },
+      findMany: async (query) => {
+        if (query.where.isProcessing) return [];
+        queries.push(query);
+        return [alert("a")];
+      },
       updateMany: () => { throw new Error("dryRun attempted a write"); },
     },
     $transaction: () => { throw new Error("dryRun started a write transaction"); },
@@ -144,6 +172,7 @@ test("dryRun only reads and uses the publication date window and batch limit", a
 
 test("route propagates publication failures and retry delay", async () => {
   const route = loadRoute({
+    alert: { findMany: async () => [] },
     $transaction: async (callback) => callback({
       alert: { updateMany: async () => ({ count: 0 }), count: async () => 1 },
     }),
@@ -157,6 +186,52 @@ test("route propagates publication failures and retry delay", async () => {
   assert.equal(response.status, 429);
   assert.equal(response.headers.get("Retry-After"), "120");
   assert.equal((await response.json()).success, false);
+});
+
+test("read-only preview reports held UNCERTAIN alerts instead of a misleading successful empty queue", async () => {
+  let ledgerQueries = 0;
+  const route = loadRoute({
+    alert: {
+      count: async () => 0,
+      findMany: async (query) => query.where.isProcessing ? [{ id: "1052756_held" }] : [],
+      updateMany: () => assert.fail("preview must never change publication guards"),
+    },
+    publicationLedger: { count: async (query) => {
+      ledgerQueries++;
+      assert.equal(query.where.status, "UNCERTAIN");
+      assert.deepEqual(plain(query.where.alertId.in), ["1052756_held"]);
+      return 1;
+    } },
+    $transaction: () => assert.fail("preview must not mutate or claim anything"),
+  }, { env: { ...configuredEnv, DATABASE_URL: "postgresql://fake.invalid/not-used" } });
+  const response = await route.GET(request("?dryRun=true"));
+  const body = await response.json();
+  assert.equal(response.status, 200);
+  assert.equal(body.success, false);
+  assert.equal(body.unpostedAlerts, 0);
+  assert.equal(body.heldAlerts, 1);
+  assert.equal(body.heldUncertainAlerts, 1);
+  assert.equal(body.postingState, "quarantined");
+  assert.match(body.message, /collectées/);
+  assert.equal(body.postingResult, null);
+  assert.equal(ledgerQueries, 1);
+});
+
+test("a real invocation with only held alerts returns a conflict and performs no new publication", async () => {
+  const route = loadRoute({
+    alert: { findMany: async () => [{ id: "held" }] },
+    publicationLedger: { count: async () => 1 },
+    $transaction: async (callback) => callback({
+      alert: { updateMany: async () => ({ count: 0 }), count: async () => 0 },
+    }),
+  }, { env: { ...configuredEnv, DATABASE_URL: "postgresql://fake.invalid/not-used" } });
+  const response = await route.GET(request());
+  assert.equal(response.status, 409);
+  const body = await response.json();
+  assert.equal(body.success, false);
+  assert.equal(body.postingState, "quarantined");
+  assert.equal(body.heldUncertainAlerts, 1);
+  assert.equal(body.postingResult, null);
 });
 
 function claimingDatabase(rows) {
