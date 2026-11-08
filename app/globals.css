@@ -152,7 +152,7 @@ button svg,a svg { flex:none; }
 .view-toggle { display:flex; gap:2px; padding:3px; border:1px solid #dfe5ec; border-radius:8px; background:#fff; box-shadow:0 2px 9px #29486409; }
 .view-toggle button { display:flex; align-items:center; gap:6px; background:transparent; border-radius:5px; font-size:10px; font-weight:550; padding:7px 9px; color:#8692a4; }
 .view-toggle button.selected { background:#eef3fb; color:#365d99; }
-.map-control-button,.map-locate-button { display:grid; place-items:center; width:39px; height:39px; border:1px solid #dfe5ec; border-radius:8px; background:white; color:#6b7e99; box-shadow:0 2px 9px #29486409; }
+.map-locate-button { display:grid; place-items:center; width:39px; height:39px; border:1px solid #dfe5ec; border-radius:8px; background:white; color:#6b7e99; box-shadow:0 2px 9px #29486409; }
 .map-locate-button { position:absolute; bottom:126px; right:19px; }
 .map-legend { position:absolute; left:23px; bottom:58px; background:#fffffff2; border:1px solid #dfe5ec; padding:12px 14px; border-radius:9px; width:217px; box-shadow:0 3px 12px #29486409; }
 .legend-heading { display:flex; align-items:center; width:100%; gap:7px; background:none; padding:0; font-weight:600; font-size:10px; color:#546b89; }
@@ -244,7 +244,6 @@ button svg,a svg { flex:none; }
   .view-toggle button { font-size:9px; gap:4px; padding:6px; }
   .view-toggle button>svg { width:14px; height:14px; }
   .map-view-controls { gap:5px; }
-  .map-control-button { width:35px; height:36px; }
   .map-locate-button { right:13px; bottom:145px; width:36px; height:36px; }
   .transit-map-canvas .maplibregl-ctrl-bottom-right .maplibregl-ctrl { margin-right:13px; }
   .transit-map-canvas .maplibregl-ctrl-top-right { top:64px; right:13px; }
@@ -382,7 +381,6 @@ button svg,a svg { flex:none; }
   .header-map-controls .view-toggle button { flex:1; min-height:40px; gap:6px; font-size:12px; }
   .header-map-controls .view-toggle button>svg { width:17px; height:17px; }
   .header-map-controls .header-traffic { height:44px; }
-  .header-map-controls .map-control-button { width:44px; height:44px; flex:none; }
   .transit-map-area { inset:0 0 72px; }
   .transit-panel { height:72px; border-radius:18px 18px 0 0; }
   .transit-panel.expanded { height:min(78%,760px); }
@@ -464,24 +462,13 @@ button svg,a svg { flex:none; }
 
 .map-legend:not(.open) { width:auto; padding:0 12px; }
 .aircraft-control { position:absolute; right:19px; bottom:180px; z-index:5; }
-.aircraft-toggle { position:relative; display:grid; place-items:center; width:44px; height:44px; background:#fff; border:1px solid #dfe5ec; border-radius:10px; color:#627e93; box-shadow:0 2px 9px #29486409; }
-.aircraft-toggle.detected { color:#147a8a; background:#e9f9fa; border-color:#93c9cf; }
-.aircraft-toggle>span { position:absolute; right:-4px; top:-5px; background:#147a8a; color:#fff; border:2px solid white; border-radius:12px; min-width:18px; font-size:10px; padding:1px 3px; }
-.aircraft-panel { position:absolute; bottom:0; right:54px; width:270px; padding:12px; background:#fffffff7; border:1px solid #d9e6eb; border-radius:15px; box-shadow:0 5px 30px #16364f15; }
+.aircraft-panel { position:absolute; bottom:0; right:0; width:270px; padding:12px; background:#fffffff7; border:1px solid #d9e6eb; border-radius:15px; box-shadow:0 5px 30px #16364f15; }
 .aircraft-heading { display:flex; align-items:center; gap:7px; color:#226575; font-size:14px; }
 .aircraft-heading .icon-button { margin-left:auto; background:transparent; }
-.aircraft-switch { width:100%; display:flex; align-items:center; justify-content:space-between; gap:12px; min-height:44px; background:#f0f6f8; border-radius:9px; padding:8px 10px; color:#426576; font-size:11px; }
-.layer-switch { width:30px; height:18px; border-radius:12px; background:#cad5db; padding:3px; }
-.layer-switch:before { content:""; display:block; width:12px; height:12px; border-radius:50%; background:white; }
-.aircraft-switch[aria-pressed="true"] .layer-switch { background:#298493; }
-.aircraft-switch[aria-pressed="true"] .layer-switch:before { transform:translateX(12px); }
-.aircraft-empty { font-size:11px; color:#6c8393; line-height:1.6; padding:6px 2px; }
 .aircraft-panel footer { border-top:1px solid #e4edf0; padding-top:9px; margin-top:10px; color:#81929f; font-size:9px; }
 .aircraft-panel footer a { color:#387e8d; text-decoration:underline; }
 .aircraft-details { display:grid; gap:7px; padding:13px 2px 3px; font-size:12px; color:#3f6674; }
 .aircraft-details small { font-size:10px; color:#81929f; }
-.aircraft-list { display:grid; gap:5px; margin-top:9px; }
-.aircraft-list button { display:flex; align-items:center; justify-content:space-between; min-height:44px; background:#eaf6f8; border-radius:8px; padding:10px; color:#276c7c; font-size:12px; }
 .traffic-tabs { display:grid; grid-template-columns:1fr 1.3fr; gap:6px; margin-bottom:14px; }
 .traffic-tabs button { display:flex; align-items:center; justify-content:center; gap:5px; min-height:44px; padding:8px 5px; border:1px solid #dde6f1; background:#f7f9fc; border-radius:10px; color:#6c7f97; font-size:10px; font-weight:600; }
 .traffic-tabs button[aria-pressed="true"] { background:#eef4ff; color:#2458bd; border-color:#9cb8df; }
