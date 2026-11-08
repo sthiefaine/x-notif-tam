@@ -1,61 +1,43 @@
-# Prototype illustré Comédie–Gare Saint-Roch
+# Montpellier dessinée : du pilote à la carte 3D
 
-## Accès et périmètre
+Le rendu retenu est une véritable scène 3D navigable : la géométrie publique
+CityGML de Montpellier (2020) conserve les volumes et toitures, tandis que deux
+matériaux originaux générés par IA habillent façades et toits. Les positions des
+arbres viennent de l’inventaire municipal ; leurs formes et tailles sont stylisées.
 
-La page `/lab/3d` reste hors de la navigation principale et porte `noindex`.
-Le pilote couvre un seul quartier. La référence 3D est géographique ; le
-redessin IA est un aperçu fixe expérimental, avec des détails à vérifier.
+Le premier cadrage est Comédie–Saint-Roch. Les données compilées couvrent toute
+la commune : 42 085 bâtiments répartis en 315 tuiles et 60 648 arbres. La scène
+charge les détails seulement autour de la vue ; elle ne charge pas les 85 Mo
+complets au démarrage. Les boutons permettent de zoomer, tourner, incliner et
+recentrer la carte.
 
-## Plan de réalisation
+- [Sources, méthode, licence, limites et reproduction](montpellier-city-production.md).
+- [Prompts exacts et fichiers des matériaux IA](city-materials-prompts.md).
+- [Échantillon illustré à caméra fixe et son prompt](fixed-camera-pilot.md) :
+  un seul cadrage du centre, à comparer avec la 3D libre. Le catalogue géométrique
+  complet ne signifie pas que toute la ville est déjà redessinée en atlas.
 
-1. Construire la référence avec les empreintes et hauteurs ouvertes
-   OpenStreetMap/OpenFreeMap. Les données IGN pourront enrichir les volumes.
-2. Fixer une caméra et enregistrer la référence et ses paramètres.
-3. Redessiner une image par IA avec les rues, intersections et empreintes comme
-   invariants. Contrôler les raccords, perspectives et repères sur l'échantillon.
-4. Pour une carte illustrée navigable, choisir une projection et un système de
-   tuilage communs avant de produire les tuiles voisines. Une capture déjà
-   inclinée ne doit pas être inclinée une seconde fois comme une texture au sol.
-5. Superposer des positions et tracés réels seulement après validation des
-   transformations géographiques et des masques de profondeur. Le pilote
-   illustré n'affiche aucun faux véhicule.
+## Rôle de Google Maps
 
-Les images sont préparées puis servies comme fichiers statiques. Aucun appel de
-génération d'image n'est déclenché par un voyageur et aucune clé de génération
-n'est distribuée au navigateur.
+La vue 3D Google Maps indiquée par l’utilisateur sert de référence visuelle de
+niveau de détail et de cadrage pendant la préparation. Les premières images
+fixes ont permis d’évaluer le style, mais ne sont pas le fond de la carte actuelle.
+Aucun SDK Google, capture satellite, photomaillage Google ou texture Google n’est
+intégré à cette scène. Les prompts des matériaux sont textuels, sans image Google.
+Aucune clé Google Maps n’a été créée ou configurée pour ce pilote.
 
-## Référence
+Assembler des captures indépendantes aurait demandé environ 1 700 dessins au
+pas proposé de 192 m utiles, avec des problèmes de perspective et de raccords.
+L’URL Google ne définit d’ailleurs pas seule une résolution métrique certifiée.
+La géométrie commune permet ici de garder les rues et les volumes indépendants
+de l’habillage, et de changer librement de caméra.
 
-- Capture : `public/lab/montpellier-reference-3d.png`, 8 novembre 2026.
-- Caméra : centre `[3.8795,43.6068]`, zoom `17`, inclinaison `55°`, orientation `-25°`.
-- Vue navigateur : `1280×1024`, carte extraite du rectangle
-  `[0,175.59375,1280,812.40625]` en pixels CSS.
-- [Style Liberty OpenFreeMap](https://tiles.openfreemap.org/styles/liberty).
-- [Hauteurs OpenMapTiles](https://openmaptiles.org/docs/schema/#building).
-- [Source et attribution OpenStreetMap](https://www.openstreetmap.org/copyright).
-- [Conditions OpenFreeMap](https://openfreemap.org/tos/).
-- [Référence MapLibre : bâtiments 3D](https://maplibre.org/maplibre-gl-js/docs/examples/display-buildings-in-3d/).
+## Limites du premier rendu
 
-Les volumes OSM sont simplifiés et leurs hauteurs peuvent être estimées. Les
-façades ajoutées par l'IA ne constituent pas un relevé architectural.
-
-## Génération
-
-Première version : outil intégré de génération d'images, sans appel à une API
-payante depuis le site. Résultat : `public/lab/montpellier-illustration-pilot.png`.
-Le redessin conserve l'organisation générale, mais ses façades et certains détails
-sont interprétés ; il est présenté comme une illustration fixe. Prompt exact ci-dessous.
-
-```text
-Use case: style-transfer.
-Asset: one experimental illustrated map image for a hidden Montpellier prototype.
-Input image 1 is BOTH the edit target and the strict geometric reference: a real OpenStreetMap/OpenFreeMap 3D rendering of the Comédie–Gare Saint-Roch area.
-
-Redraw this exact image as a beautiful, highly detailed high-bit pixel-art miniature Mediterranean French city. Warm pale-limestone and cream façades, restrained terracotta and slate roof details, crisp window rhythms, green trees within the existing parks, subtle natural daylight and clean readable streets. Finely resolved pixel-art textures, not coarse low-resolution blocks, no tilt-shift blur.
-
-Geometric invariants: keep the exact camera, perspective, framing, street edges, street intersections, plazas, building footprints, courtyard openings, and approximate building heights from the input. Do not move or replace blocks. Comédie is in the upper central part; the Rue Maguelone corridor runs down toward Gare Saint-Roch and Square Planchon in the lower centre. Preserve these relationships exactly. Do not create new roads, extra landmarks, towers, bridges or invented monuments. Keep the same landscape aspect ratio and viewpoint.
-
-Produce city artwork only: the interface controls, point-of-interest icons, map labels, station rings and coloured route guide overlays in the reference are not part of the illustration. Depict the underlying real roads in those same positions. Do not add vehicles, people, words, labels, logos, borders or interface. Attribution will be displayed outside the image by the application.
-
-The resulting image is a style prototype, not a claim of surveyed façade accuracy. Return one finished landscape image.
-```
+- Le millésime des bâtiments est 2020, pas une reconstruction actuelle garantie.
+- Les façades, matières et dimensions des arbres sont des interprétations.
+- Le relief entre les bâtiments n’est pas reconstitué : chaque bâtiment est
+  abaissé jusqu’à son sol local pour le fond de carte plan.
+- Les véhicules et alertes de la carte principale ne sont pas encore superposés
+  à cet atelier. Leur calage et leur visibilité derrière les bâtiments restent
+  une étape distincte.

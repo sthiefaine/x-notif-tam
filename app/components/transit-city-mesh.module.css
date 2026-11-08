@@ -1,0 +1,29 @@
+.viewport { position:relative; isolation:isolate; width:100%; height:100%; min-height:380px; overflow:hidden; background:#f1eddf; color:#374637; }
+.map { position:absolute; inset:0; }
+.map :global(.maplibregl-canvas):focus-visible { outline:3px solid #58806b; outline-offset:-3px; }
+.map :global(.maplibregl-ctrl-bottom-left) { bottom:39px; left:8px; }
+.map :global(.maplibregl-ctrl-bottom-right) { bottom:38px; right:8px; }
+.map :global(.maplibregl-ctrl-scale) { background:#fffff5c9; border-color:#74816a; font:10px/18px inherit; padding:0 5px; }
+.map :global(.maplibregl-ctrl-attrib) { background:#fffff1e6; font-size:10px; }
+.controls, .orientation { position:absolute; z-index:2; right:20px; display:flex; align-items:stretch; padding:3px; border:1px solid #d8d9ca; border-radius:12px; background:#fffef5f2; box-shadow:0 3px 16px #35462a16; }
+.controls { top:20px; flex-direction:column; }
+.orientation { bottom:75px; align-items:center; }
+.controls button, .orientation button { display:flex; align-items:center; justify-content:center; width:44px; height:44px; border:0; border-radius:8px; background:transparent; color:#3d4f39; font:400 25px/1 system-ui,sans-serif; cursor:pointer; touch-action:manipulation; }
+.controls button:hover, .orientation button:hover { background:#e8eddc; }
+.controls button:focus-visible, .orientation button:focus-visible, .pillButton:focus-visible, .error button:focus-visible { outline:3px solid #58806b; outline-offset:2px; }
+.orientation .angle { font-size:12px; font-weight:600; }
+.orientation button[aria-pressed="true"] { background:#dbe7cd; color:#2e542d; }
+.orientationSeparator { width:1px; height:24px; margin:0 3px; background:#dcdfd2; }
+.controls .recenter { font-size:30px; }
+.controls .overview { font-size:22px; }
+.separator { height:1px; margin:3px 7px; background:#dcdfd2; }
+.caption { position:absolute; left:20px; bottom:14px; display:flex; align-items:center; gap:7px; max-width:calc(100% - 40px); padding:7px 10px; border:1px solid #d9ddcf; border-radius:7px; background:#fffef4ee; color:#64705c; font-size:10px; line-height:1.4; pointer-events:none; }
+.dot { width:5px; height:5px; flex:none; border-radius:50%; background:#8b9b6d; }
+.hint { position:absolute; right:20px; bottom:19px; color:#59664d; text-shadow:0 1px 4px #fff; font-size:10px; pointer-events:none; }
+.status { position:absolute; z-index:2; left:50%; top:20px; transform:translateX(-50%); display:flex; flex-direction:column; align-items:center; gap:7px; max-width:calc(100% - 170px); text-align:center; font-size:12px; }
+.pill, .pillButton { padding:9px 13px; border:1px solid #d8decd; border-radius:20px; background:#fffef5ee; box-shadow:0 2px 8px #35462a0d; color:#59684d; line-height:1.4; }
+.pillButton { font:inherit; cursor:pointer; }
+.pillButton:hover { background:#f2f5e7; }
+.error { display:flex; flex-direction:column; align-items:center; gap:9px; width:270px; max-width:100%; padding:14px; border:1px solid #dddccc; border-radius:12px; background:#fffef5f5; line-height:1.5; }
+.error button { padding:7px 12px; border:1px solid #d8decd; border-radius:6px; background:#edf1e3; color:#3d4f39; font:inherit; cursor:pointer; }
+@media(max-width:700px) { .viewport { min-height:360px; } .controls { top:14px; right:14px; } .orientation { right:14px; bottom:73px; } .caption { left:12px; bottom:12px; max-width:calc(100% - 24px); font-size:9px; } .hint { display:none; } .status { top:14px; max-width:calc(100% - 155px); font-size:11px; } .pill,.pillButton { padding:8px 10px; border-radius:10px; } }
