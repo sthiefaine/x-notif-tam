@@ -47,7 +47,8 @@ export class DwellDetector {
       }
     } else if (timestamp < episode.last) return undefined;
     const seconds = Math.floor((episode.last - episode.first) / 1000);
-    episode.prolonged ||= episode.observations >= 4 && seconds >= 180;
+    const thresholdSeconds = network.routes.find((route) => route.id === vehicle.routeId)?.type === 0 ? 120 : 180;
+    episode.prolonged ||= episode.observations >= 4 && seconds >= thresholdSeconds;
     this.episodes.set(vehicle.id, episode);
     this.prune(now);
     if (episode.observations < 2 || seconds < 30) return undefined;

@@ -7,7 +7,7 @@ const dwell = loadTypeScript("lib/transit/dwell.ts", { mocks: { "./realtime": re
 const now = Date.parse("2026-11-09T12:00:00Z");
 function fixture() {
   const stops = ["A", "B", "C", "D"].map((id, index) => ({ id, name: id, lat: 43.6, lon: 3.8 + index * .002, routeIds: ["1"] }));
-  const network = { metadata: { version: "test" }, stops };
+  const network = { metadata: { version: "test" }, routes: [{ id: "1", type: 3 }], stops };
   const lookup = { metadata: { version: "test" }, trips: { t: { id: "t", routeId: "1", patternId: "p", timingProfileId: "timing", serviceId: "s", startTimeSeconds: 12 * 3600, directionId: 0 } },
     patterns: { p: { id: "p", stopIds: ["A", "B", "C", "D"], stopSequences: [1, 2, 3, 4] } },
     timingProfiles: { timing: { arrivalOffsets: [0, 600, 1200, 1800], departureOffsets: [0, 600, 1200, 1800] } }, services: { s: ["20261109"] } };
@@ -72,6 +72,31 @@ test("fresh GPS-only observations produce a qualified long stop after three minu
   const direct = detector.update(record(210, { stopId: "B", stopSequence: 2 }), network, lookup, now + 210000);
   assert.equal(direct.observedSeconds, 210, "newly supplied identifiers must not erase coherent GPS history");
   assert.equal(direct.stopMatchSource, "feed");
+});
+
+test("trams confirm at two minutes while buses and unknown route types keep three minutes", () => {
+  for (const type of [0, 3, undefined]) {
+    for (const explicit of [false, true]) {
+      const { network, lookup, record } = fixture(), detector = new dwell.DwellDetector();
+      network.routes[0].type = type;
+      const threshold = type === 0 ? 120 : 180;
+      for (const seconds of [0, 30, 60, 90, 119, 120, 150, 179, 180]) {
+        const value = record(seconds, explicit ? { stopId: "B", stopSequence: 2 } : {});
+        const observation = detector.update(value, network, lookup, now + seconds * 1000);
+        assert.equal(observation?.state === "prolonged", seconds >= threshold, `type ${type}, explicit ${explicit}, ${seconds}s`);
+      }
+    }
+  }
+});
+
+test("two minutes still require at least four distinct tram measurements", () => {
+  const { network, lookup, record } = fixture(), detector = new dwell.DwellDetector();
+  network.routes[0].type = 0;
+  for (const seconds of [0, 60, 120]) {
+    assert.notEqual(detector.update(record(seconds), network, lookup, now + seconds * 1000)?.state, "prolonged");
+  }
+  assert.notEqual(detector.update(record(120), network, lookup, now + 125000)?.state, "prolonged", "repeated timestamp is not a fourth measurement");
+  assert.equal(detector.update(record(150), network, lookup, now + 150000).state, "prolonged");
 });
 
 test("GPS matching does not turn scheduled waits, termini, movement, ambiguity or old measurements into incidents", () => {
