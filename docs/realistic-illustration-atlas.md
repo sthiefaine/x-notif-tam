@@ -1,7 +1,8 @@
 # Atlas réaliste de Montpellier
 
 L’atelier `/lab/illustration` remplace le grand dessin pixel-art agrandi par des
-vues semi-réalistes distinctes, créées avec l’outil de génération d’images intégré.
+illustrations semi-réalistes, créées avec l’outil de génération d’images intégré,
+puis assemblées dans une carte continue à caméra fixe.
 Le mode public de caméra libre reste retiré et `/lab/3d` redirige vers l’atelier.
 
 ## Livrable et consultation
@@ -17,17 +18,25 @@ Le mode public de caméra libre reste retiré et `/lab/3d` redirige vers l’ate
 Les 30 PNG pèsent au total 126,61 Mo, stockés sur le système de fichiers,
 sans ajout en base. Une visite ne télécharge pas l’atlas complet.
 
-Le menu Quartiers propose des miniatures et une recherche. Les noms des secteurs
-utilisent des repères TaM proches de leur centre, pas des limites administratives
-ou des emprises officielles de quartiers. Certaines vues périphériques montrent
-aussi les communes voisines. Le fil de navigation donne accès à la vue générale.
+La galerie et le sélecteur de quartiers ont été remplacés par un seul espace
+pixel de 1672 × 941. Le zoom reste ancré sous le curseur et la carte se déplace
+sans changement de cadrage au chargement des détails. Certaines vues périphériques
+montrent aussi les communes voisines.
 
-Une seule image originale est active à la fois ; les petites miniatures sont
-chargées à la demande dans le menu. Le zoom maximum correspond à un pixel source
-par pixel CSS (convention habituelle des visionneuses photo). Un écran Retina
-peut interpoler plusieurs pixels physiques ; le site ne prétend pas afficher
-une résolution 4K native ou créer des détails par le zoom. Un véritable détail
-rapproché est une image différente, pas un recadrage agrandi de la vue générale.
+Une pyramide WebP de six niveaux (échelles 1, 2, 4, 8, 16, 32) conserve la même
+composition à tous les niveaux. Les quatre premiers couvrent toute la carte ;
+les deux derniers sont clairsemés autour des cinq vues rapprochées. Le moteur
+conserve automatiquement les parents disponibles ailleurs ou pendant le chargement.
+Le niveau initial est centré sur Comédie, à l’échelle 24 ; « Tout voir » recadre
+la ville entière. Les niveaux détaillés utilisent les images rapprochées réelles,
+sans prétendre ajouter des détails IA lors du zoom. La netteté varie en dehors
+de ces zones, et les raccords ne sont pas tous invisibles.
+
+Les tuiles de 512 pixels sont chargées près de l’écran, avec au plus huit
+requêtes et un cache borné à 64 images / 24 millions de pixels décodés.
+La version produite contient 853 tuiles pour 36 879 106 octets (36,88 Mo).
+Les originaux restent conservés pour la traçabilité et ne sont plus chargés par
+la page. Aucun besoin de clé Google ou de base de données n’est ajouté.
 
 L’en-tête est compact et les boutons mesurent au moins 44 pixels. Le glisser,
 le pincement, les flèches et +/− fonctionnent ; « Tout voir » ajuste l’image.
@@ -69,7 +78,37 @@ production, pas une empreinte au sol exacte. `boundsRole=reference-envelope` et
 `registration=independent-frame` sont conservés pour chaque vue. Le manifeste
 ne présente pas la couverture théorique comme une validation du géocalage des
 illustrations. Aucune couture continue ni superposition de véhicules en direct
-n’est certifiée dans cet atlas. La carte TaM principale conserve ces fonctions.
+n’est certifiée dans cet atlas. La composition pixel est continue, mais ne
+constitue pas un relevé géographique : la parallaxe des toits, les interprétations
+IA et les différences de densité restent visibles. La carte TaM principale
+conserve les véhicules et le géocalage opérationnel.
+
+## Carte continue
+
+`data/continuous-atlas-calibration.json` conserve les empreintes des trente
+originaux et leurs transformations vers l’image générale. Le recalage source
+vers illustration utilise des correspondances visuelles ; la pose des caméras
+sert de modèle entre les vues, avec des ancrages centraux contrôlés. Les cadres
+de planification ne sont pas traités comme des empreintes GPS exactes.
+
+`scripts/build-continuous-atlas.py` reprojette les images et leurs masques,
+adoucit les bords puis construit les niveaux parents depuis la même composition.
+Les marges couvertes par l’interface des références sont exclues. Ce traitement
+géométrique ne modifie pas les originaux. Il utilise Python, NumPy et OpenCV,
+uniquement hors ligne :
+
+```sh
+python scripts/build-continuous-atlas.py \
+  --calibration data/continuous-atlas-calibration.json --workers 4
+```
+
+Le résultat se trouve dans `public/lab/continuous/v1/` : `manifest.json` décrit
+les niveaux et les tuiles présentes ; `audit.json` donne les dimensions, octets,
+empreintes et contrôles de décodage. Le contrat de la page est généré dans
+`data/continuous-atlas.ts`. Les captures brutes ne sont pas publiées. Le moteur
+ne demande jamais une tuile absente d’un niveau clairsemé et conserve la même
+caméra pendant les changements de niveau. Les tests contrôlent notamment cet
+ancrage, les limites de navigation, la sélection des tuiles et le budget mémoire.
 
 ## Assemblage et validation
 
@@ -78,7 +117,7 @@ capture réelles et les PNG locaux. Il contrôle structure, dimensions, contenu
 décodable et empreintes des images avant de les annoncer disponibles. Il vérifie
 les formats réels PNG/JPEG des références, sans supposer leur format à partir
 du nom de fichier. Il écrit atomiquement le manifeste avec son audit intégré. La variante TypeScript
-`data/illustration-atlas.ts` conserve le contrat typé utilisé par la page.
+`data/illustration-atlas.ts` conserve le contrat typé de l’ancienne galerie.
 
 ```sh
 node scripts/build-illustration-atlas.cjs \
