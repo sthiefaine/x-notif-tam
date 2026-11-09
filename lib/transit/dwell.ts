@@ -1,13 +1,8 @@
 import type { TransitNetwork, TransitTripLookup } from "./types";
 import type { ProlongedStopObservation } from "./live-types";
 import { FRESH_SECONDS, ageSeconds, plannedStopTimes, relationshipIs, type VehicleRecord } from "./realtime";
-
-export function distanceMetres(a: { lat: number; lon: number }, b: { lat: number; lon: number }): number {
-  const radians = Math.PI / 180;
-  const dLat = (b.lat - a.lat) * radians, dLon = (b.lon - a.lon) * radians;
-  const value = Math.sin(dLat / 2) ** 2 + Math.cos(a.lat * radians) * Math.cos(b.lat * radians) * Math.sin(dLon / 2) ** 2;
-  return 6371_000 * 2 * Math.atan2(Math.sqrt(value), Math.sqrt(Math.max(0, 1 - value)));
-}
+import { distanceMetres, matchVehicleStop } from "./stop-matching";
+export { distanceMetres } from "./stop-matching";
 interface Episode {
   key: string; anchor: { lat: number; lon: number }; first: number; last: number;
   observations: number; prolonged: boolean; stopId: string;
@@ -17,21 +12,27 @@ export class DwellDetector {
   private episodes = new Map<string, Episode>();
   update(record: VehicleRecord, network: TransitNetwork, lookup: TransitTripLookup, now: number): ProlongedStopObservation | undefined {
     const vehicle = record.vehicle;
+    vehicle.stopMatch = undefined;
     const reject = () => { this.episodes.delete(vehicle.id); return undefined; };
-    if (!vehicle.routeKnown || !vehicle.tripKnown || !vehicle.tripId || ageSeconds(vehicle.timestamp, now) > FRESH_SECONDS) return reject();
+    const timestamp = Date.parse(vehicle.timestamp);
+    if (!vehicle.routeKnown || !vehicle.tripKnown || !vehicle.tripId || !Number.isFinite(timestamp)
+      || timestamp > now + 30_000 || ageSeconds(vehicle.timestamp, now) > FRESH_SECONDS
+      || relationshipIs(record.trip.scheduleRelationship, "CANCELED", 3)
+      || relationshipIs(record.trip.scheduleRelationship, "DELETED", 7)) return reject();
     const trip = lookup.trips[vehicle.tripId], pattern = trip && lookup.patterns[trip.patternId];
     if (!trip || !pattern) return reject();
-    const matches = vehicle.stopSequence === undefined ? [] : pattern.stopSequences.map((sequence, index) => sequence === vehicle.stopSequence ? index : -1).filter((index) => index >= 0);
-    const stopId = vehicle.stopId || (matches.length === 1 ? pattern.stopIds[matches[0]] : undefined);
-    if (!stopId || (matches.length === 1 && pattern.stopIds[matches[0]] !== stopId)) return reject();
+    const match = matchVehicleStop(vehicle, network, lookup);
+    vehicle.stopMatch = match;
+    if (!match) return reject();
+    const { stopId, stopSequence } = match;
     // current_status is usable only with a matching current_stop_sequence.
-    if (matches.length === 1 && record.currentStatus !== undefined && !relationshipIs(record.currentStatus, "STOPPED_AT", 1)) return reject();
+    if (vehicle.stopSequence !== undefined && record.currentStatus !== undefined && !relationshipIs(record.currentStatus, "STOPPED_AT", 1)) return reject();
+    if (vehicle.speedMps !== undefined && Number.isFinite(vehicle.speedMps) && vehicle.speedMps >= 0.8) return reject();
     const stop = network.stops.find((candidate) => candidate.id === stopId);
-    const planned = plannedStopTimes(lookup, record.trip, stopId, vehicle.stopSequence, now);
+    const planned = plannedStopTimes(lookup, record.trip, stopId, stopSequence, now);
     if (!stop || !planned || planned.terminal || now < planned.departure + 60_000 || distanceMetres(vehicle, stop) > 60) return reject();
-    const timestamp = Date.parse(vehicle.timestamp);
     if (timestamp < planned.departure + 60_000) return reject();
-    const key = `${vehicle.tripId}:${record.trip.startDate || "inferred"}:${stopId}:${vehicle.stopSequence ?? "unique"}`;
+    const key = `${vehicle.tripId}:${record.trip.startDate || "inferred"}:${stopId}:${stopSequence}`;
     let episode = this.episodes.get(vehicle.id);
     if (episode && (episode.key !== key || timestamp - episode.last > 90_000 || distanceMetres(vehicle, episode.anchor) > 60)) episode = undefined;
     if (!episode) {
@@ -51,7 +52,7 @@ export class DwellDetector {
     this.prune(now);
     if (episode.observations < 2 || seconds < 30) return undefined;
     return { state: episode.prolonged ? "prolonged" : "candidate", since: new Date(episode.first).toISOString(),
-      observedSeconds: seconds, observations: episode.observations, stopId, cause: "unknown",
+      observedSeconds: seconds, observations: episode.observations, stopId, stopMatchSource: match.source, cause: "unknown",
       label: episode.prolonged ? "Arrêt prolongé observé — cause inconnue" : "Immobilité en cours d'observation" };
   }
   prune(now: number) {

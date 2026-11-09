@@ -144,7 +144,8 @@ export default function TransitLineDiagram({ network, route, vehicles, arrivals 
           </li>;
         })}</ol>
         <div className={styles.vehicleTrack}>{projections.filter((item) => item.projection && item.projection.progress >= windowStart && item.projection.progress <= windowEnd - 1).map(({ vehicle, projection }) => {
-          const stop = vehicle.stopId ? stopsById.get(vehicle.stopId) : undefined;
+          const stopId = vehicle.prolongedStop?.stopId || vehicle.stopId || vehicle.stopMatch?.stopId;
+          const stop = stopId ? stopsById.get(stopId) : undefined;
           const state = describeVehicle(vehicle, now, stop, vehicle.tripId ? tripDelays.get(vehicle.tripId) : undefined);
           return <button type="button" key={vehicle.id} className={styles.vehicle} style={{ top: ROW_HEIGHT / 2 + (projection!.progress - windowStart) * ROW_HEIGHT }} onClick={() => onVehicleSelect?.(vehicle.id)} title={`${state.label} · ${state.detail}`} aria-label={`Véhicule ${vehicle.id} · ${state.label} · position indicative sur ce schéma`}>
             <TransitVehicleMarker color={route.color} textColor={route.textColor} bearing={vehicle.bearing} stationary={state.kind === "at_stop"} fresh={state.kind !== "stale"} attentionColor={state.attention ? state.color : undefined} />

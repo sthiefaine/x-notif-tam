@@ -2,6 +2,7 @@ import { createHash, randomUUID } from "node:crypto";
 import type { TransitNetwork, TransitTripLookup, TransitStop } from "./types";
 import type { StopPassage } from "./headways";
 import { distanceMetres } from "./dwell";
+import { matchVehicleStop } from "./stop-matching";
 import { ageSeconds, parisDate, relationshipIs, serviceTime, type VehicleRecord } from "./realtime";
 
 type Position = { lat: number; lon: number; time: number; tripId: string; serviceDate: string };
@@ -41,12 +42,8 @@ export class PassageDetector {
       const trip = lookup.trips[vehicle.tripId], pattern = trip && lookup.patterns[trip.patternId];
       const timing = trip && lookup.timingProfiles[trip.timingProfileId];
       if (!trip || trip.routeId !== vehicle.routeId || !pattern || !timing || trip.startTimeSeconds === null) continue;
-      const matches = pattern.stopIds.flatMap((stopId, index) =>
-        (vehicle.stopId === undefined || stopId === vehicle.stopId)
-          && (vehicle.stopSequence === undefined || pattern.stopSequences[index] === vehicle.stopSequence) ? [index] : []);
-      // No stop identifier, ambiguous loops and conflicting GTFS references are not evidence.
-      const resolved = (vehicle.stopId !== undefined || vehicle.stopSequence !== undefined) && matches.length === 1 ? matches[0] : -1;
-      const index = resolved;
+      const match = matchVehicleStop(vehicle, network, lookup);
+      const index = match ? pattern.stopSequences.indexOf(match.stopSequence) : -1;
       const arrivalOffset = index >= 0 ? timing.arrivalOffsets[index] : null;
       const validOffsets = timing.arrivalOffsets.filter((offset): offset is number => offset !== null);
       if (!validOffsets.length) continue;

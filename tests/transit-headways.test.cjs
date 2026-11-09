@@ -3,12 +3,13 @@ const assert = require("node:assert/strict");
 const { loadTypeScript } = require("./helpers/load-typescript.cjs");
 const realtime = loadTypeScript("lib/transit/realtime.ts");
 const time = loadTypeScript("lib/transit/time.ts");
-const dwell = loadTypeScript("lib/transit/dwell.ts", { mocks: { "./realtime": realtime } });
+const stopMatching = loadTypeScript("lib/transit/stop-matching.ts");
+const dwell = loadTypeScript("lib/transit/dwell.ts", { mocks: { "./realtime": realtime, "./stop-matching": stopMatching } });
 const core = loadTypeScript("lib/transit/headways.ts", { mocks: { "./realtime": realtime, "./time": time } });
 const calendar = loadTypeScript("lib/transit/headways-calendar.ts");
 const filters = loadTypeScript("lib/transit/headways-filters.ts", { mocks: { "./time": time, "./headways-calendar": calendar } });
 const aggregate = loadTypeScript("lib/transit/headways-aggregate.ts", { mocks: { "./time": time, "./headways": core } });
-const detector = loadTypeScript("lib/transit/headways-detector.ts", { mocks: { "./realtime": realtime, "./dwell": dwell } });
+const detector = loadTypeScript("lib/transit/headways-detector.ts", { mocks: { "./realtime": realtime, "./dwell": dwell, "./stop-matching": stopMatching } });
 const NOW = Date.parse("2026-11-08T12:00:00Z");
 const plain = (value) => JSON.parse(JSON.stringify(value));
 function fixture() {
@@ -129,6 +130,21 @@ test("restart-safe event keys distinguish service date and repeated stop occurre
   const { network, lookup } = fixture(); lookup.patterns.p.stopIds = ["B", "B"];
   const loop = approach(new detector.PassageDetector(), record(NOW, { stopSequence: 1 }), NOW, { network, lookup }).passages[0];
   assert.notEqual(first.key, loop.key);
+});
+
+test("a GPS-only vehicle contributes a passage only after a fresh approach to its own unique trip stop", () => {
+  const instance = new detector.PassageDetector();
+  const current = record(NOW, { stopId: undefined, stopSequence: undefined });
+  assert.equal(observe(instance, [current]).passages.length, 0);
+  const entry = approach(instance, record(NOW + 60000, { stopId: undefined, stopSequence: undefined }), NOW + 60000);
+  assert.equal(entry.passages.length, 1);
+  assert.equal(entry.passages[0].stopId, "B");
+  assert.equal(entry.passages[0].stopSequence, 2);
+  assert.equal(entry.passages[0].evidence, "gps_entry_unique_stop");
+  assert.equal(observe(instance, [record(NOW + 90000, { stopId: undefined, stopSequence: undefined })], NOW + 90000).passages.length, 0);
+  const { network, lookup } = fixture();
+  lookup.patterns.p.stopIds = ["B", "B"];
+  assert.equal(approach(new detector.PassageDetector(), current, NOW, { network, lookup }).passages.length, 0);
 });
 
 test("source interruption or poll gap rotates continuity and cannot create an apparent long headway", () => {

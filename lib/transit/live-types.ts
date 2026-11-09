@@ -22,8 +22,15 @@ export interface ProlongedStopObservation {
   observedSeconds: number;
   observations: number;
   stopId: string;
+  stopMatchSource?: "feed" | "gps";
   cause: "unknown";
   label: string;
+}
+export interface VehicleStopMatch {
+  stopId: string;
+  stopSequence: number;
+  source: "feed" | "gps";
+  distanceMetres: number;
 }
 export interface LiveVehicle {
   id: string;
@@ -36,6 +43,8 @@ export interface LiveVehicle {
   headsign?: string;
   stopId?: string;
   stopSequence?: number;
+  /** Separate from producer identifiers; GPS matching is an estimated association. */
+  stopMatch?: VehicleStopMatch;
   lat: number;
   lon: number;
   bearing?: number;

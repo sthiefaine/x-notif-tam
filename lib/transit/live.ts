@@ -304,7 +304,7 @@ export class LiveCollector {
       const age = ageSeconds(vehicle.timestamp, now);
       if (age > HIDE_SECONDS) continue;
       const freshness = age <= FRESH_SECONDS ? "fresh" as const : "stale" as const;
-      const value = { ...vehicle, ageSeconds: age, freshness, prolongedStop: freshness === "fresh" ? vehicle.prolongedStop : undefined };
+      const value = { ...vehicle, ageSeconds: age, freshness, stopMatch: freshness === "fresh" ? vehicle.stopMatch : undefined, prolongedStop: freshness === "fresh" ? vehicle.prolongedStop : undefined };
       const previous = vehiclesById.get(value.id);
       if (!previous || Date.parse(previous.timestamp) < Date.parse(value.timestamp)) vehiclesById.set(value.id, value);
     }

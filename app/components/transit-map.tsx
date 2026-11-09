@@ -260,7 +260,8 @@ export default function TransitMap(props: Props) {
     const important = new Set(props.importantRouteIds);
     source(map, "tam-vehicles")?.setData({ type: "FeatureCollection", features: props.vehicles.map((vehicle) => {
       const route = routeMap.get(vehicle.routeId);
-      const state = describeVehicle(vehicle, props.now, vehicle.stopId ? stops.get(vehicle.stopId) : undefined, vehicle.tripId ? delays.get(vehicle.tripId) : undefined);
+      const stopId = vehicle.prolongedStop?.stopId || vehicle.stopId || vehicle.stopMatch?.stopId;
+      const state = describeVehicle(vehicle, props.now, stopId ? stops.get(stopId) : undefined, vehicle.tripId ? delays.get(vehicle.tripId) : undefined);
       return { type: "Feature", id: vehicle.id, properties: { id: vehicle.id, isTram: Boolean(route && isTram(route)), important: important.has(vehicle.routeId) || route?.shortName === "A" || state.attention || vehicle.id === props.selectedVehicleId, state: state.kind, stateColor: state.color, attention: state.attention, color: safeColor(route?.color), textColor: safeColor(route?.textColor, "#ffffff"), bearing: vehicleBearing(vehicle.bearing) ?? 0, hasBearing: vehicleBearing(vehicle.bearing) !== null, fresh: freshVehicle(vehicle, props.now), longStop: longStop(vehicle, props.now), selected: vehicle.id === props.selectedVehicleId, age: vehicleAge(vehicle, props.now) }, geometry: { type: "Point", coordinates: [vehicle.lon, vehicle.lat] } };
     }) });
   }, [ready, props.network, props.vehicles, props.arrivals, props.importantRouteIds, props.now, props.selectedVehicleId]);

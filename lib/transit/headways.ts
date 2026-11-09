@@ -208,7 +208,7 @@ export const HEADWAY_METHODOLOGY = {
   grouping: "Chaque jour civil de Paris, quai, sens et ligne reste distinct. Aucun intervalle ne relie deux jours. Si le sens GTFS manque, chaque parcours reste distinct.",
   weighting: "Moyenne et médiane exactes de tous les intervalles mesurables des jours sélectionnés, poolés par histogramme en millisecondes ; jamais moyenne des moyennes ou médianes quotidiennes. Les arrêts les plus desservis et les lignes longues contribuent davantage au total tram ou bus.",
   planned: "Horaires d’arrivée GTFS des services actifs, exceptions de calendrier incluses ; fenêtre de 7 h à 21 h, heure de Paris.",
-  observed: "Entrée GPS détectée à moins de 40 m d’un arrêt, après une position du même véhicule à au moins 80 m, moins de 90 s avant, sur une course reconnue. Le premier arrêt vu au démarrage est ignoré. Horodatages véhicule uniquement ; aucune prévision TripUpdates.",
+  observed: "Entrée GPS détectée à moins de 40 m d’un arrêt, après une position du même véhicule à au moins 80 m, moins de 90 s avant, sur une course reconnue. L’arrêt est fourni par le flux ou estimé sans ambiguïté parmi les arrêts du parcours connu ; les quais proches et occurrences répétées non résolues sont exclus. Le premier arrêt vu au démarrage est ignoré. Horodatages véhicule uniquement ; aucune prévision TripUpdates.",
   limits: [
     "Les observations sont partielles : certains passages peuvent manquer, même lorsque le flux est disponible. Ces chiffres ne décrivent pas tous les services du réseau.",
     "Le flux est relevé environ toutes les 30 s. L’entrée se situe entre deux positions espacées de 90 s au plus ; ce n’est pas l’heure d’ouverture des portes ni une précision garantie de 30 s.",

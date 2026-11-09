@@ -479,6 +479,7 @@ button svg,a svg { flex:none; }
 .prolonged-card { border:1px solid #e3d6ef; background:#faf6ff; border-radius:13px; padding:12px; }
 .prolonged-card>div:first-child { display:flex; align-items:center; gap:8px; }
 .prolonged-card strong { flex:1; min-width:0; font-size:12px; color:#66517a; }
+.prolonged-estimate { display:block; margin-top:8px; color:#806199; font-size:10px; line-height:1.5; }
 .prolonged-card>div:first-child>span:last-child { white-space:nowrap; font-weight:700; font-size:12px; color:#8652a9; }
 .prolonged-actions { display:flex; gap:7px; margin-top:10px; }
 .prolonged-actions button { min-height:40px; display:flex; align-items:center; gap:5px; padding:8px; border:1px solid #dac8e9; border-radius:9px; color:#7d559b; background:#fff; font-size:10px; }

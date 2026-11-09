@@ -2,7 +2,8 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const { loadTypeScript } = require("./helpers/load-typescript.cjs");
 const realtime = loadTypeScript("lib/transit/realtime.ts");
-const dwell = loadTypeScript("lib/transit/dwell.ts", { mocks: { "./realtime": realtime } });
+const stopMatching = loadTypeScript("lib/transit/stop-matching.ts");
+const dwell = loadTypeScript("lib/transit/dwell.ts", { mocks: { "./realtime": realtime, "./stop-matching": stopMatching } });
 const impacts = loadTypeScript("lib/transit/alert-impacts.ts");
 const alerts = loadTypeScript("lib/transit/live-alerts.ts", { mocks: { "./realtime": realtime, "./dwell": dwell, "./alert-impacts": impacts } });
 const baseTime = Date.parse("2026-11-08T12:00:00Z");
@@ -219,6 +220,18 @@ test("repeated entity timestamps do not count as additional dwell observations",
     if (sample < 3) h.advance(30);
   }
   assert.equal(h.collector.getSnapshot().vehicles[0].prolongedStop, undefined);
+  h.collector.stop();
+});
+
+test("GPS-only stop associations are published separately and disappear when the position ages", async () => {
+  const h = harness();
+  h.feeds.vehicles = feed(h.now(), [vehicleEntity(h.now(), { stopId: undefined, currentStopSequence: undefined })]);
+  await h.collector.pollSource("vehicles");
+  const fresh = h.collector.getSnapshot().vehicles[0];
+  assert.equal(fresh.stopId, undefined); assert.equal(fresh.stopSequence, undefined);
+  assert.equal(fresh.stopMatch.stopId, "B"); assert.equal(fresh.stopMatch.source, "gps");
+  h.advance(91);
+  assert.equal(h.collector.getSnapshot().vehicles[0].stopMatch, undefined);
   h.collector.stop();
 });
 
