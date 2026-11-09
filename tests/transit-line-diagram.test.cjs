@@ -17,6 +17,7 @@ vm.runInNewContext(outputText, {
     if (name === "./transit-line-diagram.module.css") return { __esModule: true, default: new Proxy({}, { get: (_, key) => String(key) }) };
     if (name === "@/lib/transit/alert-impacts") return require("./helpers/load-client-component.cjs").loadClientComponent("lib/transit/alert-impacts.ts");
     if (name === "./transit-vehicle-marker") return require("./helpers/load-client-component.cjs").loadClientComponent("app/components/transit-vehicle-marker.tsx");
+    if (name === "./transit-icons") return require("./helpers/load-client-component.cjs").loadClientComponent("app/components/transit-icons.tsx");
     if (name === "./transit-vehicle-state") return { nextTripDelays: () => new Map(), describeVehicle: (vehicle) => ({ kind: vehicle.freshness === "stale" ? "stale" : "unknown", label: "État observé", detail: "Source de test", color: "#777", attention: false }) };
     if (name === "react" || name === "react/jsx-runtime") return require(name);
     throw new Error(`Unexpected diagram import ${name}`);

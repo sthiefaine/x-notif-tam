@@ -1,4 +1,4 @@
-.panel { border: 1px solid #e5e9ee; border-radius: 18px; background: #fff; padding: 14px 12px; margin: 14px 0; color: #233044; }
+.panel { --diagram-axis: 55px; border: 1px solid #e5e9ee; border-radius: 18px; background: #fff; padding: 14px 12px; margin: 14px 0; color: #233044; }
 .heading { display: flex; align-items: center; gap: 9px; }
 .heading h3 { font-size: 14px; line-height: 1.35; margin: 0; letter-spacing: -.35px; }
 .kicker { color: #728096; font-size: 9px; font-weight: 800; letter-spacing: 1.4px; }
@@ -16,10 +16,10 @@
 .lineAlerts em { font-size: 10px; color: #8b7654; margin-top: 7px; font-style: normal; }
 .scroll { max-height: none; overflow: visible; margin: 10px -6px 0; padding: 0 6px; }
 .schematic { position: relative; }
-.track { position: absolute; left: 52px; width: 5px; border-radius: 8px; background: var(--diagram-line, #475569); opacity: .75; }
+.track { position: absolute; left: calc(var(--diagram-axis) - 2.5px); width: 5px; border-radius: 8px; background: var(--diagram-line, #475569); opacity: .75; }
 .stations { list-style: none; padding: 0; margin: 0; }
 .stationRow { height: 60px; display: flex; align-items: center; margin: 0; }
-.stationButton { display: flex; align-items: center; gap: 11px; width: calc(100% - 40px); margin-left: 40px; padding: 8px 7px 8px 5px; text-align: left; color: inherit; border: 0; border-radius: 10px; background: transparent; cursor: pointer; min-width: 0; }
+.stationButton { display: flex; align-items: center; gap: 11px; width: calc(100% - var(--diagram-axis) + 15px); margin-left: calc(var(--diagram-axis) - 15px); padding: 8px 7px 8px 5px; text-align: left; color: inherit; border: 0; border-radius: 10px; background: transparent; cursor: pointer; min-width: 0; }
 .stationButton:hover { background: #f3f7fb; }
 .stationButton:focus-visible, .vehicle:focus-visible, .unplaced button:focus-visible, .variantPicker select:focus-visible { outline: 3px solid #4a82ba; outline-offset: 2px; }
 .selected { background: #edf4fb; }
@@ -30,8 +30,9 @@
 .stationName small { color: #8190a2; font-size: 9px; line-height: 1.3; }
 .stopAlert { font-size: 11px; width: 17px; height: 17px; }
 .arrival { font-size: 10px; color: #397461; white-space: nowrap; padding: 5px 7px; background: #edf7f1; border-radius: 6px; }
-.vehicleTrack { position: absolute; top: 0; left: 0; width: 39px; height: 100%; pointer-events: none; }
-.vehicle { position: absolute; transform: translate(-50%, -50%); pointer-events: auto; width: 44px; height: 44px; padding: 10px; display: grid; place-items: center; border-radius: 50%; border: 0; background: transparent; cursor: pointer; z-index: 2; transition: top .5s ease; }
+.vehicleTrack { position: absolute; top: 0; left: var(--diagram-axis); width: 0; height: 100%; pointer-events: none; }
+.vehicle { position: absolute; left: 0; transform: translate(-50%, -50%); pointer-events: auto; width: 44px; height: 44px; padding: 10px; display: grid; place-items: center; border-radius: 50%; border: 0; background: transparent; cursor: pointer; z-index: 2; transition: top .5s ease; }
+.vehicleNumber { position: absolute; right: calc(50% + 12px); top: 50%; transform: translateY(-50%); max-width: 42px; overflow: hidden; text-overflow: ellipsis; padding: 3px 4px; border: 1px solid #dce3ec; border-radius: 5px; background: #fff; color: #334155; font-size: 9px; line-height: 1.2; font-weight: 750; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .vehicle:hover { background: #2458bd0d; }
 .legend { border-top: 1px solid #eef1f5; padding-top: 12px; margin-top: 7px; display: flex; flex-wrap: wrap; gap: 9px 13px; font-size: 9px; color: #78859a; }
 .legend span { display: inline-flex; align-items: center; gap: 5px; }
@@ -52,16 +53,15 @@
 .moreStops:hover { color: #2458bd; background: #f3f7fb; border-radius: 8px; }
 .selected .stationDot { background: var(--diagram-line); box-shadow: 0 0 0 4px #fff; }
 .selected .stationName small { color: #2458bd; font-weight: 700; }
-.closureNotice { width:100%; display:flex; align-items:center; gap:9px; padding:11px; margin-top:12px; background:#fff9e8; color:#9b721c; border:1px solid #ecd995; border-radius:11px; text-align:left; cursor:pointer; }
+.closureNotice { width:100%; display:flex; align-items:center; gap:9px; padding:11px; margin-top:12px; background:#fff7f7; color:#b91c1c; border:1px solid #fecaca; border-radius:11px; text-align:left; cursor:pointer; }
 .closureNotice>span:nth-child(2) { display:grid; gap:4px; flex:1; }
 .closureNotice>span:first-child { display:grid; place-items:center; width:23px; height:23px; border:2px solid currentColor; border-radius:50%; font-size:20px; font-weight:700; }
 .closureNotice strong { font-size:11px; }
 .closureNotice small { font-size:10px; }
-.closedNow { color:#b44957; border-color:#e8bdc4; background:#fff1f3; }
-.plannedClosure .stationDot,.activeClosure .stationDot { display:grid; place-items:center; font-weight:800; font-size:16px; line-height:1; border-width:2px; box-shadow:none; background:#fff; }
-.plannedClosure .stationDot { color:#be8a16; border-color:#be8a16; }
-.activeClosure .stationDot { color:#c24b59; border-color:#c24b59; }
-.plannedClosure .stationName small { color:#a27922; }
-.activeClosure .stationName small { color:#b44957; }
+.closedNow { color:#991b1b; border-color:#fca5a5; background:#fef2f2; }
+.plannedClosure .stationDot,.activeClosure .stationDot { display:grid; place-items:center; border-width:2px; border-color:#dc2626; box-shadow:none; background:#fff; color:#dc2626; }
+.plannedClosure .stationDot svg,.activeClosure .stationDot svg { display:block; stroke-width:2.7; }
+.activeClosure .stationDot { color:#fff; background:#dc2626; }
+.plannedClosure .stationName small,.activeClosure .stationName small { color:#b91c1c; }
 .unplaced summary { min-height:36px; display:list-item; align-content:center; color:#758298; cursor:pointer; font-size:11px; }
 .unplaced button { min-height:44px; margin-top:5px; }

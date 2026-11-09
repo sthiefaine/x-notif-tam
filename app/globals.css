@@ -488,12 +488,13 @@ button svg,a svg { flex:none; }
 .transit-panel.has-traffic .panel-scroll { padding-top:20px; }
 .header-traffic b.prolonged-count { background:#eadff6; color:#80539d; }
 @media (max-width:700px) { .transit-panel.has-traffic .panel-scroll { padding-top:4px; } .map-legend { bottom:100px; } .map-locate-button { bottom:116px; } .aircraft-control { bottom:170px; } .transit-map-canvas .maplibregl-ctrl-bottom-right { bottom:80px; } }
-.stop-service-notice { display:flex; gap:9px; align-items:center; padding:10px; margin-top:12px; border:1px solid #ecd995; border-radius:11px; background:#fff9e8; color:#9b721c; }
+.stop-service-notice { display:flex; gap:9px; align-items:center; padding:10px; margin-top:12px; border:1px solid #fecaca; border-radius:11px; background:#fff7f7; color:#b91c1c; }
 .stop-service-notice>span { display:grid; place-items:center; width:22px; height:22px; flex-shrink:0; border:2px solid currentColor; border-radius:50%; font-size:19px; font-weight:700; }
+.stop-service-notice>span svg { display:block; stroke-width:2.5; }
 .stop-service-notice p { display:grid; gap:4px; margin:0; }
 .stop-service-notice strong { font-size:11px; }
 .stop-service-notice small { font-size:10px; }
-.stop-service-notice.active { color:#b44957; border-color:#e8bdc4; background:#fff1f3; }
+.stop-service-notice.active { color:#991b1b; border-color:#fca5a5; background:#fef2f2; }
 @media (max-width:700px) { .transit-panel.has-selection.expanded { height:min(90%,900px); } .map-legend { bottom:20px; } .map-locate-button { bottom:42px; } .aircraft-control { bottom:96px; } .transit-map-canvas .maplibregl-ctrl-bottom-right { bottom:0; } }
 .alert-map-link { min-height:44px; display:flex; align-items:center; gap:7px; margin-top:11px; padding:9px 12px; border:1px solid #c3d4ed; background:#eaf2ff; border-radius:9px; color:#315e9a; font-size:11px; font-weight:650; }
 .incident-routes button { min-height:44px; min-width:44px; border:1px solid #e1e7ef; border-radius:10px; background:#ffffff99; }

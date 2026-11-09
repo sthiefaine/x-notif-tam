@@ -84,8 +84,8 @@ function addLayers(map: LibreMap) {
   map.addLayer({ id: "tam-stop-hit", type: "circle", source: "tam-stops", minzoom: 12, paint: { "circle-radius": 12, "circle-opacity": 0 } });
   map.addLayer({ id: "tam-stop-selected", type: "circle", source: "tam-stops", filter: ["==", ["get", "id"], ""], paint: { "circle-radius": 9, "circle-color": "#ffffff", "circle-stroke-color": "#153768", "circle-stroke-width": 3 } });
   map.addLayer({ id: "tam-stop-label", type: "symbol", source: "tam-stops", minzoom: 15, layout: { "text-field": ["get", "name"], "text-font": ["Noto Sans Regular"], "text-size": 11, "text-offset": [0, 1.1], "text-anchor": "top", "text-max-width": 12 }, paint: { "text-color": "#33445a", "text-halo-color": "#ffffff", "text-halo-width": 2 } });
-  map.addLayer({ id: "tam-stop-impact-circles", type: "circle", source: "tam-stop-impacts", paint: { "circle-radius": 7, "circle-color": "#ffffff", "circle-stroke-color": ["get", "color"], "circle-stroke-width": 2 } });
-  map.addLayer({ id: "tam-stop-impact-symbols", type: "symbol", source: "tam-stop-impacts", layout: { "text-field": "×", "text-font": ["Noto Sans Bold"], "text-size": 15, "text-allow-overlap": true, "text-ignore-placement": true }, paint: { "text-color": ["get", "color"] } });
+  map.addLayer({ id: "tam-stop-impact-circles", type: "circle", source: "tam-stop-impacts", paint: { "circle-radius": 8, "circle-color": ["get", "fill"], "circle-stroke-color": "#dc2626", "circle-stroke-width": 2 } });
+  map.addLayer({ id: "tam-stop-impact-symbols", type: "symbol", source: "tam-stop-impacts", layout: { "text-field": "×", "text-font": ["Noto Sans Bold"], "text-size": 15, "text-allow-overlap": true, "text-ignore-placement": true }, paint: { "text-color": ["get", "symbolColor"] } });
   map.addLayer({ id: "tam-stop-impact-hit", type: "circle", source: "tam-stop-impacts", paint: { "circle-radius": 18, "circle-opacity": 0 } });
   for (const arrow of [true, false]) {
     const glyph = document.createElement("canvas");
@@ -301,7 +301,7 @@ export default function TransitMap(props: Props) {
     if (!ready || !map || !props.network) return;
     source(map, "tam-stop-impacts")?.setData({ type: "FeatureCollection", features: props.network.stops.flatMap((stop) => {
       const impact = stopServiceImpacts(props.alerts, stop.id, props.selectedRouteId, props.now, props.direction).find((item) => item.serviceStatus === "not_served" && item.temporalStatus !== "unknown");
-      return impact ? [{ type: "Feature" as const, properties: { id: stop.id, color: impact.temporalStatus === "upcoming" ? "#be8a16" : "#c24b59" }, geometry: { type: "Point" as const, coordinates: [stop.lon, stop.lat] } }] : [];
+      return impact ? [{ type: "Feature" as const, properties: { id: stop.id, fill: impact.temporalStatus === "active" ? "#dc2626" : "#ffffff", symbolColor: impact.temporalStatus === "active" ? "#ffffff" : "#dc2626" }, geometry: { type: "Point" as const, coordinates: [stop.lon, stop.lat] } }] : [];
     }) });
   }, [ready, props.network, props.alerts, props.selectedRouteId, props.direction, props.now]);
 
