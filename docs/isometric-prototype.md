@@ -1,3 +1,5 @@
+> Mise à jour : l’atelier utilise désormais un [atlas réaliste de 30 vues](realistic-illustration-atlas.md). Le texte suivant conserve le contexte du pilote fixe.
+
 # Montpellier dessinée — illustration fixe
 
 Le rendu retenu est désormais une illustration à caméra fixe, orientée au nord,
@@ -7,7 +9,7 @@ déplacer dans le dessin, sans changer l’angle de vue.
 Le nouvel échantillon couvre le centre élargi : Peyrou, Écusson, Comédie,
 Esplanade, Corum, Saint-Roch et une partie d’Antigone. Les vues rapprochées
 Google Maps fournissent les détails ; la vue générale fixe la composition.
-Le [journal de production et le prompt exact](fixed-camera-pilot.md) décrivent
+Le [journal de l’atlas réaliste](realistic-illustration-atlas.md) décrit
 les références, le fichier publié et les limites du résultat.
 
 Il ne s’agit pas encore d’un atlas continu de toute Montpellier : pas de calage

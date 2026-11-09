@@ -1,7 +1,8 @@
-# Échantillon illustré fixe — centre élargi, nord en haut
+# Ancien échantillon illustré — archive
 
-Publié sur `/lab/illustration`. L’ancien `/lab/3d` redirige définitivement vers
-cette page ; son modèle de 85 Mo n’est plus servi publiquement.
+Remplacé par l’[atlas réaliste](realistic-illustration-atlas.md) le 9 novembre 2026.
+Les chemins et mesures ci-dessous décrivent le pilote précédent, récupérable
+dans Git au commit `2ae3135a3e42abb3cf282fac8ba01a3c28310760`.
 
 ## Image retenue
 

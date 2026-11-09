@@ -1,0 +1,16 @@
+Use case: style-transfer.
+Asset type: one high-detail architectural illustration used as a close-view visual benchmark for a Montpellier city atlas.
+Input image 1 is the edit target and the sole authority for the exact geography, framing, building footprints, and camera. It shows Place de la Comédie, Montpellier, looking north with an approximately 39-degree tilted aerial camera. Redraw THIS PARTICULAR VIEW; do not replace it with a generic French city or a different angle.
+
+Primary request: transform the supplied map screenshot into a refined, semi-realistic architectural illustration with premium, believable material detail. Reconstruct cleanly the same scene underneath the interface. Preserve the reference composition and every visible street, block footprint, building mass, roofline, courtyard, plaza boundary, and street junction. Keep the camera rotation, tilt, crop, relative scale, and perspective unchanged. Do not zoom out or rotate. Use the highest native detail available, in a wide landscape image matching the reference's approximately 16:9 composition.
+
+Critical geographic anchors:
+- The large Opera Comédie building with its extensive pale grey metal roof remains in the lower-left/lower-centre portion, with its long axis rising diagonally toward the square. Preserve that roof silhouette and the opera frontage facing the square.
+- The single small circular Fontaine des Trois Grâces remains near the centre, slightly right of centre, inside the open diagonal plaza. Retain its small basin and sculptural centre at the reference location and scale. Do not turn it into a large pool, add fountains, or move it.
+- The Place de la Comédie is the same diagonal open space running southwest to northeast, framed by the same continuous pale stone façades. Preserve the small streets and the wedge-shaped building at its upper-left side.
+- Keep the Esplanade tree-lined allées and the existing park in the upper-centre/right part of the reference, rather than filling them with invented blocks.
+- Keep the tram/street corridors on their actual visible alignments, with no fabricated live vehicle markers.
+
+Style and materials: realistic Montpellier pale limestone, natural weathering, warm but restrained terracotta roof tiles, authentic grey zinc and slate roofs where visible, convincing chimneys, roof ridges, dormers and window proportions. Crisp architectural detail with subtle painterly refinement, not a cartoon and not a photograph with degraded map photogrammetry. Soft natural daylight, gentle physically plausible shadows, restrained neutral greens and warm stone tones, calm premium editorial architectural rendering. No black outlines, no pixel art, no isometric distortion, no oversized windows, no candy colours, no oversaturation, no miniature-toy effect, no invented monuments.
+
+Remove only the screenshot interface: search box, side rail, buttons, labels, controls, menus, map logos and footer text. Continue the underlying neighbourhood naturally into those narrow interface-covered margins without changing the central geographic anchors. Output the architectural image only, with no UI, border, footer, caption, lettering, logos or watermark. No text anywhere. The application provides source attribution separately.

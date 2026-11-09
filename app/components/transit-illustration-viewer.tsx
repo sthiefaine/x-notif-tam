@@ -1,6 +1,6 @@
 "use client";
 
-import Image from "next/image";
+/* eslint-disable @next/next/no-img-element -- This zoom viewer needs the original image's exact pixels, without responsive image downsampling. */
 import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import type { PointerEvent } from "react";
 import styles from "./transit-illustration-viewer.module.css";
@@ -11,35 +11,41 @@ export type TransitIllustrationViewerProps = {
   height: number;
   areaLabel: string;
   credit: string | { label: string; href?: string };
+  initialView?: "native" | "fit";
+  onImageError?: () => void;
 };
 type Point = { x: number; y: number };
 type Anchor = Point & { u: number; v: number };
-type Geometry = { imageWidth: number; imageHeight: number; viewportWidth: number; viewportHeight: number; offsetX: number; offsetY: number };
+type Geometry = { imageWidth: number; imageHeight: number; nativeWidth: number; viewportWidth: number; viewportHeight: number; offsetX: number; offsetY: number };
 type Gesture = { kind: "pan"; point: Point; left: number; top: number }
   | { kind: "pinch"; distance: number; zoom: number; u: number; v: number };
-const MIN_ZOOM = 1, MAX_ZOOM = 8;
-const clampZoom = (zoom: number) => Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, zoom));
+const MIN_ZOOM = 1;
+const clampZoom = (zoom: number, maximum: number) => Math.max(MIN_ZOOM, Math.min(maximum, zoom));
 const centre = (first: Point, second: Point): Point => ({ x: (first.x + second.x) / 2, y: (first.y + second.y) / 2 });
 const distance = (first: Point, second: Point) => Math.hypot(first.x - second.x, first.y - second.y);
 
 /** Fixed artwork: zoom changes its scale, never its orientation or geography. */
-export default function TransitIllustrationViewer({ imageSrc, width, height, areaLabel, credit }: TransitIllustrationViewerProps) {
+export default function TransitIllustrationViewer({ imageSrc, width, height, areaLabel, credit, initialView = "native", onImageError }: TransitIllustrationViewerProps) {
   const viewport = useRef<HTMLDivElement>(null);
   const pointers = useRef(new Map<number, Point>());
   const gesture = useRef<Gesture | null>(null);
   const pendingAnchor = useRef<Anchor | null>(null);
-  const geometry = useRef<Geometry>({ imageWidth: 1, imageHeight: 1, viewportWidth: 0, viewportHeight: 0, offsetX: 0, offsetY: 0 });
+  const geometry = useRef<Geometry>({ imageWidth: 1, imageHeight: 1, nativeWidth: 1, viewportWidth: 0, viewportHeight: 0, offsetX: 0, offsetY: 0 });
   const zoomValue = useRef(MIN_ZOOM);
+  const maximumZoom = useRef(MIN_ZOOM);
   const [size, setSize] = useState({ width: 0, height: 0 });
   const [zoom, setZoom] = useState(MIN_ZOOM);
   const [dragging, setDragging] = useState(false);
-  const [pixelRatio, setPixelRatio] = useState(1);
-  const [originalRequested, setOriginalRequested] = useState(false);
   const [imageError, setImageError] = useState(false);
   const instructions = useId();
   const ratio = width > 0 && height > 0 ? width / height : 1;
-  const baseWidth = Math.max(1, Math.min(size.width, size.height * ratio));
-  const displayedWidth = baseWidth * zoom, displayedHeight = displayedWidth / ratio;
+  // Standard photo-viewer 1:1 scale: one source pixel per CSS pixel. A Retina
+  // screen may interpolate device pixels, but we never stretch a 1672px image
+  // over a 4000px canvas or reduce the whole atlas to a tiny Retina postcard.
+  const nativeWidth = Math.max(1, width);
+  const baseWidth = size.width && size.height ? Math.min(size.width, size.height * ratio, nativeWidth) : Math.min(1, nativeWidth);
+  const maxZoomNative = nativeWidth / baseWidth;
+  const displayedWidth = Math.min(nativeWidth, baseWidth * zoom), displayedHeight = displayedWidth / ratio;
   const canvasWidth = Math.max(size.width, displayedWidth), canvasHeight = Math.max(size.height, displayedHeight);
 
   const imagePoint = useCallback((point: Point): Anchor => {
@@ -53,7 +59,7 @@ export default function TransitIllustrationViewer({ imageSrc, width, height, are
       top: dimensions.offsetY + anchor.v * dimensions.imageHeight - anchor.y, behavior: "instant" });
   }, []);
   const changeZoom = useCallback((value: number, point?: Point, fixedPoint?: Pick<Anchor, "u" | "v">) => {
-    const next = clampZoom(value), dimensions = geometry.current;
+    const next = clampZoom(value, maximumZoom.current), dimensions = geometry.current;
     const at = point || { x: dimensions.viewportWidth / 2, y: dimensions.viewportHeight / 2 };
     const anchor = fixedPoint ? { ...at, ...fixedPoint } : imagePoint(at);
     if (next === zoomValue.current) { applyAnchor(anchor); return; }
@@ -77,18 +83,26 @@ export default function TransitIllustrationViewer({ imageSrc, width, height, are
     let firstMeasure = true;
     const measure = () => {
       const next = { width: element.clientWidth, height: element.clientHeight }, previous = geometry.current;
-      setPixelRatio(Math.max(1, window.devicePixelRatio || 1));
+      const nextPixelRatio = 1;
       if (!next.width || !next.height) return;
-      if (!firstMeasure && next.width === previous.viewportWidth && next.height === previous.viewportHeight) return;
+      if (!firstMeasure && next.width === previous.viewportWidth && next.height === previous.viewportHeight && previous.nativeWidth === width / nextPixelRatio) return;
       const anchor = !firstMeasure && previous.viewportWidth && previous.viewportHeight
         ? imagePoint({ x: previous.viewportWidth / 2, y: previous.viewportHeight / 2 }) : { u: 0.5, v: 0.5 };
       if (firstMeasure) {
-        // Fill a tall screen immediately; "Tout voir" still reveals the full artwork.
-        const fitWidth = Math.min(next.width, next.height * ratio);
-        const initialZoom = clampZoom(Math.max(next.width, next.height * ratio) / fitWidth);
+        const fitWidth = Math.min(next.width, next.height * ratio, width / nextPixelRatio);
+        const initialZoom = initialView === "native" ? width / (fitWidth * nextPixelRatio) : MIN_ZOOM;
         zoomValue.current = initialZoom;
-        setZoom(initialZoom); setOriginalRequested(false); setImageError(false);
+        maximumZoom.current = width / (fitWidth * nextPixelRatio);
+        setZoom(initialZoom); setImageError(false);
         firstMeasure = false;
+      } else {
+        const fitWidth = Math.min(next.width, next.height * ratio, width / nextPixelRatio);
+        const nativeScale = previous.imageWidth / previous.nativeWidth;
+        const maximum = width / (fitWidth * nextPixelRatio);
+        const nextZoom = clampZoom(nativeScale * maximum, maximum);
+        zoomValue.current = nextZoom;
+        maximumZoom.current = maximum;
+        setZoom(nextZoom);
       }
       pendingAnchor.current = { ...anchor, x: next.width / 2, y: next.height / 2 };
       setSize(next);
@@ -98,19 +112,15 @@ export default function TransitIllustrationViewer({ imageSrc, width, height, are
     observer?.observe(element);
     window.addEventListener("resize", measure);
     return () => { observer?.disconnect(); window.removeEventListener("resize", measure); };
-  }, [imageSrc, ratio, imagePoint]);
+  }, [imageSrc, width, ratio, initialView, imagePoint]);
   useLayoutEffect(() => {
     if (!size.width || !size.height) return;
-    const dimensions = { imageWidth: displayedWidth, imageHeight: displayedHeight, viewportWidth: size.width, viewportHeight: size.height,
+    const dimensions = { imageWidth: displayedWidth, imageHeight: displayedHeight, nativeWidth, viewportWidth: size.width, viewportHeight: size.height,
       offsetX: (canvasWidth - displayedWidth) / 2, offsetY: (canvasHeight - displayedHeight) / 2 };
     geometry.current = dimensions;
+    maximumZoom.current = maxZoomNative;
     if (pendingAnchor.current) { applyAnchor(pendingAnchor.current, dimensions); pendingAnchor.current = null; }
-  }, [displayedWidth, displayedHeight, size, canvasWidth, canvasHeight, applyAnchor]);
-  useEffect(() => {
-    // Next's responsive candidates stop at 3840 by default. Request the original
-    // only once zoom actually needs more pixels, and retain it when zooming back.
-    if (width > 3840 && Math.min(width, displayedWidth * pixelRatio) > 3840) setOriginalRequested(true);
-  }, [width, displayedWidth, pixelRatio]);
+  }, [displayedWidth, displayedHeight, nativeWidth, maxZoomNative, size, canvasWidth, canvasHeight, applyAnchor]);
   useEffect(() => {
     const element = viewport.current;
     if (!element) return;
@@ -178,19 +188,19 @@ export default function TransitIllustrationViewer({ imageSrc, width, height, are
         }
       }}>
       <div className={styles.canvas} style={{ width: canvasWidth, height: canvasHeight }}><div className={styles.art} style={{ width: displayedWidth, height: displayedHeight }}>
-        <Image key={imageSrc} src={imageSrc} alt={`Illustration IA de ${areaLabel}, vue fixe avec le nord en haut.`} fill
-          sizes={`${Math.ceil(displayedWidth)}px`} quality={90} priority unoptimized={originalRequested} draggable={false} onError={() => setImageError(true)} />
+        <img key={imageSrc} src={imageSrc} width={width} height={height} alt={`Illustration de ${areaLabel}, vue fixe avec le nord en haut.`}
+          decoding="async" fetchPriority="high" draggable={false} onLoad={() => setImageError(false)} onError={() => { setImageError(true); onImageError?.(); }} />
       </div></div>
     </div>
     <span className={styles.north} aria-label="Nord en haut">N ↑</span>
     <div className={styles.controls} role="group" aria-label="Commandes du dessin">
-      <button type="button" onClick={() => changeZoom(zoomValue.current * 1.4)} disabled={zoom >= MAX_ZOOM} aria-label="Agrandir le dessin">+</button>
+      <button type="button" onClick={() => changeZoom(zoomValue.current * 1.4)} disabled={displayedWidth >= nativeWidth - 0.01} aria-label="Agrandir le dessin">+</button>
       <button type="button" onClick={() => changeZoom(zoomValue.current / 1.4)} disabled={zoom <= MIN_ZOOM} aria-label="Réduire le dessin">−</button>
-      <output className={styles.zoom} aria-label="Grossissement par rapport à la vue entière">{Math.round(zoom * 100)} %</output>
+      <output className={styles.zoom} aria-label="Résolution native affichée" title="100 % = détail maximal de cette image">{Math.min(100, Math.round(displayedWidth / nativeWidth * 100))} %</output>
       <button type="button" className={styles.fit} onClick={reset}>Tout voir</button>
     </div>
     {imageError ? <p className={styles.error} role="status">Le dessin ne peut pas être chargé. <a href={imageSrc} target="_blank" rel="noopener noreferrer">Ouvrir l’image</a></p> : null}
-    <div className={styles.caption}><p id={instructions} className={styles.note}>Glisser pour explorer · pincer ou utiliser + / − pour zoomer<span className={styles.srOnly}>. Au clavier : flèches pour se déplacer, plus ou moins pour zoomer, zéro pour tout voir.</span></p>
+    <div className={styles.caption}><p id={instructions} className={styles.note}>{displayedWidth >= nativeWidth - 0.01 ? "Détail maximal disponible · " : ""}Glisser pour explorer<span className={styles.srOnly}>. Pincer ou utiliser plus et moins pour zoomer. Au clavier : flèches pour se déplacer, plus ou moins pour zoomer, zéro pour tout voir.</span></p>
       <p className={styles.credit}>{creditHref ? <a href={creditHref} target="_blank" rel="noopener noreferrer">{creditLabel}</a> : creditLabel}</p></div>
   </section>;
 }

@@ -1,0 +1,9 @@
+Use case: style-transfer.
+Asset: whole-city overview for a fixed north-facing semi-realistic Montpellier illustration atlas.
+Image 1 is the exact geographic authority for the entire view of Montpellier and its surroundings, photographed obliquely from the south looking north. Image 2 is the architectural material and colour STYLE reference only, a closer view of Comedie, not an insert.
+
+Redraw the whole area of image 1 as a refined realistic aerial architectural illustration. Keep the same broad framing, camera heading, tilt, real street networks, green corridors, dense historic centre, stadiums, rivers, arterial roads, agricultural outskirts and city boundary relationships. It must remain recognisably this actual area, not a generic invented city. This is a CITY OVERVIEW; do not copy the close buildings of image 2 into its wide scene or replace distant neighbourhoods by enormous detailed buildings. Retain the real urban density and scale.
+
+Use believable pale limestone, natural terracotta roofs, restrained grey modern roofs, natural vegetation greens, soft neutral daylight and gently shaded authentic building masses. Subtle editorial rendering, realistic and calm. No pixel art, no cartoon black outlines, no toy city, no saturated orange blanket, no illustration texture that destroys map readability.
+
+Remove map UI, search bars, pins, place card, controls, text, logos and footer; reconstruct covered margins from the surrounding city. No labels, no vehicles or markers. App attribution is provided separately. Output one continuous wide landscape scene, highest native detail, no border or footer. Keep north up and the full overview extent.

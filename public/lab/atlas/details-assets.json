@@ -1,0 +1,105 @@
+{
+  "version": 1,
+  "generatedAt": "2026-11-08T23:39:18.078Z",
+  "generator": "built-in image_gen",
+  "styleReference": "/lab/atlas/comedie-realiste-v3.png",
+  "orientation": "Nord, cap 0°, inclinaison 39°",
+  "sourceAttribution": "Google Maps ; attribution maintenue séparément dans l’application, aucune mention intégrée à l’image.",
+  "assets": [
+    {
+      "id": "comedie",
+      "title": "Place de la Comédie et Opéra",
+      "path": "/lab/atlas/comedie-realiste-v3.png",
+      "sourceFile": "03-comedie-close.png",
+      "sourceURL": "https://www.google.com/maps/@43.6060214,3.8793828,377a,35y,39.34t/data=!3m1!1e3?entry=ttu&g_ep=EgoyMDI2MTEwMy4wIKXMDSoASAFQAw%3D%3D",
+      "width": 1672,
+      "height": 941,
+      "byteLength": 4382010,
+      "sha256": "904c4b29c75097b9bd312826e63e6f8f1073c101530a384967dd0bd2297778dc",
+      "nativeResolution": true,
+      "upscaled": false,
+      "promptFile": "output/imagegen/atlas/comedie-realiste-v3.prompt.txt",
+      "quality": {
+        "status": "visually_reviewed",
+        "anchors": "Fontaine centrale unique, grand toit gris de l’Opéra et place diagonale conservés visuellement.",
+        "limitations": "Interprétation architecturale générée par IA ; détails des façades, végétation et zones couvertes par l’interface reconstitués ; aucun géocalage métrique certifié."
+      }
+    },
+    {
+      "id": "saint-roch",
+      "title": "Gare Saint-Roch et square Planchon",
+      "path": "/lab/atlas/saint-roch-realiste-v3.png",
+      "sourceFile": "04-gare-saint-roch-close.png",
+      "sourceURL": "https://www.google.com/maps/@43.6016465,3.8793693,386a,35y,39.34t/data=!3m1!1e3?entry=ttu&g_ep=EgoyMDI2MTEwMy4wIKXMDSoASAFQAw%3D%3D",
+      "width": 1672,
+      "height": 941,
+      "byteLength": 4210517,
+      "sha256": "cc82b201f258cca9ce6dbb3862a7f7c92a1c519a100bcab78a637a6e07c06999",
+      "nativeResolution": true,
+      "upscaled": false,
+      "promptFile": "output/imagegen/atlas/saint-roch-realiste-v3.prompt.txt",
+      "quality": {
+        "status": "visually_reviewed",
+        "anchors": "Long auvent argenté contemporain, axes ferroviaires diagonaux, square et bâtiments modernes conservés visuellement.",
+        "limitations": "Interprétation architecturale générée par IA ; détails des façades, végétation et zones couvertes par l’interface reconstitués ; aucun géocalage métrique certifié."
+      }
+    },
+    {
+      "id": "peyrou",
+      "title": "Peyrou et Écusson",
+      "path": "/lab/atlas/peyrou-realiste-v3.png",
+      "sourceFile": "05-peyrou-ecusson-close.png",
+      "sourceURL": "https://www.google.com/maps/@43.606985,3.8722492,372a,35y,39.34t/data=!3m1!1e3?entry=ttu&g_ep=EgoyMDI2MTEwMy4wIKXMDSoASAFQAw%3D%3D",
+      "width": 1672,
+      "height": 941,
+      "byteLength": 4168996,
+      "sha256": "a5992e3b19a6640946bc9cf55e2bc7c15cc0f39bd32236d1fdada3d875fa9284",
+      "nativeResolution": true,
+      "upscaled": false,
+      "promptFile": "output/imagegen/atlas/peyrou-realiste-v3.prompt.txt",
+      "quality": {
+        "status": "visually_reviewed",
+        "anchors": "Peyrou, boulevard, arc et Palais de Justice néoclassique conservés ; le palais n’est pas transformé en cathédrale.",
+        "limitations": "Interprétation architecturale générée par IA ; détails des façades, végétation et zones couvertes par l’interface reconstitués ; aucun géocalage métrique certifié."
+      }
+    },
+    {
+      "id": "corum",
+      "title": "Corum et Esplanade Charles-de-Gaulle",
+      "path": "/lab/atlas/corum-realiste-v3.png",
+      "sourceFile": "06-corum-esplanade-close.png",
+      "sourceURL": "https://www.google.com/maps/@43.6100767,3.8817709,377a,35y,39.34t/data=!3m1!1e3?entry=ttu&g_ep=EgoyMDI2MTEwMy4wIKXMDSoASAFQAw%3D%3D",
+      "width": 1672,
+      "height": 941,
+      "byteLength": 4024402,
+      "sha256": "4907e7504d8c44ad734bbf5cbff06c26faa3330977b2023d45094951062706f0",
+      "nativeResolution": true,
+      "upscaled": false,
+      "promptFile": "output/imagegen/atlas/corum-realiste-v3.prompt.txt",
+      "quality": {
+        "status": "visually_reviewed",
+        "anchors": "Toiture rectangulaire contemporaine, vitrage bleu longitudinal, bandes vertes, esplanade et corridor ferroviaire conservés visuellement.",
+        "limitations": "Interprétation architecturale générée par IA ; détails des façades, végétation et zones couvertes par l’interface reconstitués ; aucun géocalage métrique certifié."
+      }
+    },
+    {
+      "id": "antigone",
+      "title": "Lycée Joffre et bordure ouest d’Antigone",
+      "path": "/lab/atlas/antigone-realiste-v3.png",
+      "sourceFile": "07-antigone-joffre-close.png",
+      "sourceURL": "https://www.google.com/maps/@43.60767,3.8867683,384a,35y,39.34t/data=!3m1!1e3?entry=ttu&g_ep=EgoyMDI2MTEwMy4wIKXMDSoASAFQAw%3D%3D",
+      "width": 1672,
+      "height": 941,
+      "byteLength": 3894057,
+      "sha256": "67ec1b9b231cb90ca750daad089d53f931c61a0c6bcb02189b48b27c5dc89505",
+      "nativeResolution": true,
+      "upscaled": false,
+      "promptFile": "output/imagegen/atlas/antigone-realiste-v3.prompt.txt",
+      "quality": {
+        "status": "visually_reviewed",
+        "anchors": "Campus, bastion, cours et terrains de sport conservés ; cette vue ne représente pas Antigone entière.",
+        "limitations": "Interprétation architecturale générée par IA ; détails des façades, végétation et zones couvertes par l’interface reconstitués ; aucun géocalage métrique certifié."
+      }
+    }
+  ]
+}
