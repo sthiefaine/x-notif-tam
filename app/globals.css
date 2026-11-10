@@ -214,7 +214,7 @@ button svg,a svg { flex:none; }
   .transit-header nav a svg { width:18px; height:18px; }
   .transit-header nav a:not(.active) span,.transit-header nav .api-nav,.transit-header nav a.active span { display:none; }
   .transit-header nav a.active { border:0; }
-  .transit-workspace { display:block; position:relative; min-height:500px; overflow:hidden; }
+  .transit-workspace { display:block; position:relative; min-height:0; overflow:hidden; }
   .transit-map-area { position:absolute; inset:0 0 182px; }
   .transit-panel { position:absolute; bottom:0; left:0; right:0; width:100%; height:220px; border-radius:19px 19px 0 0; border:1px solid #d9e1eb; border-bottom:0; box-shadow:0 -5px 25px #17395b12; transition:height .2s; }
   .transit-panel.expanded { height:min(78%,690px); }
@@ -382,7 +382,7 @@ button svg,a svg { flex:none; }
   .header-map-controls .view-toggle button>svg { width:17px; height:17px; }
   .header-map-controls .header-traffic { height:44px; }
   .transit-map-area { inset:0 0 72px; }
-  .transit-panel { height:72px; border-radius:18px 18px 0 0; }
+  .transit-panel { height:72px; min-height:0; overflow:hidden; border-radius:18px 18px 0 0; }
   .transit-panel.expanded { height:min(78%,760px); }
   .transit-panel:not(.expanded) .panel-search,.transit-panel:not(.expanded) .mode-filters,.transit-panel:not(.expanded) .panel-scroll,.transit-panel:not(.expanded) .location-message { display:none; }
   .mobile-panel-handle { height:70px; min-height:70px; touch-action:none; user-select:none; padding:8px 16px 9px; gap:8px; }
@@ -392,7 +392,14 @@ button svg,a svg { flex:none; }
   .panel-handle-label small { display:block; font-size:11px; background:#eff3fa; padding:8px 10px; border-radius:8px; white-space:nowrap; }
   .panel-handle-label>svg:last-child { transform:rotate(-90deg); }
   .expanded .panel-handle-label>svg:last-child { transform:rotate(90deg); }
-  .transit-panel.expanded .panel-scroll { overflow:auto; overscroll-behavior:contain; }
+  /* Keep one bounded touch scroller; the handle alone drags the sheet. */
+  .transit-panel.expanded .panel-scroll {
+    flex:1 1 0%; height:0; min-height:0;
+    overflow-x:hidden; overflow-y:auto;
+    touch-action:pan-y pinch-zoom;
+    -webkit-overflow-scrolling:touch;
+    overscroll-behavior-y:contain;
+  }
   .transit-panel.expanded .panel-search { margin-top:0; }
   .transit-map-canvas .maplibregl-ctrl-top-right { top:14px; }
   .map-density-note { top:14px; left:13px; font-size:9px; padding:7px 9px; max-width:calc(100% - 83px); }
@@ -401,8 +408,9 @@ button svg,a svg { flex:none; }
   .map-legend { bottom:53px; }
   .selected-vehicle-card { bottom:68px; }
   .list-layout .transit-map-area { inset:0; height:auto; }
-  .list-layout { padding-top:0; }
-  .list-layout .transit-panel { min-height:calc(100dvh - var(--header-height)); }
+  .list-layout { height:calc(100dvh - var(--header-height)); min-height:0; overflow:hidden; padding-top:0; }
+  .list-layout .transit-panel,.list-layout .transit-panel.has-selection.expanded { height:100%; min-height:0; }
+  .list-layout .transit-panel .panel-scroll { overflow-x:hidden; overflow-y:auto; }
   .list-layout .panel-search,.list-layout .panel-scroll,.list-layout .mode-filters { display:flex; }
   .list-layout .panel-scroll { display:block; }
 }
