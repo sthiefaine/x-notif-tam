@@ -126,7 +126,6 @@ button svg,a svg { flex:none; }
 .quiet-message { font-size:11px; color:#8490a3; padding:20px 0; }
 .nearby-note { font-size:9px; color:#8b98a8; line-height:1.7; margin:9px 0 20px; }
 .text-button { background:transparent; color:#6a86ae; font-size:9px; padding:3px; }
-.anticipate-section { margin-top:23px; padding-top:2px; border-top:1px solid var(--line); }
 .panel-bottom-note { display:flex; align-items:flex-start; gap:6px; border-top:1px solid var(--line); padding-top:15px; margin-top:24px; }
 .small-status-dot { width:4px; height:4px; background:#9aabba; border-radius:50%; margin-top:5px; flex:none; }
 .panel-bottom-note p { margin:0; color:#99a4b3; font-size:8px; line-height:1.8; }
@@ -351,8 +350,6 @@ button svg,a svg { flex:none; }
 .header-traffic.has-incidents b { background:#d18b20; color:#fff; }
 .transit-map-canvas .maplibregl-ctrl-top-right { top:20px; }
 .route-incident-badge { position:absolute; top:4px; right:4px; width:22px; height:22px; display:grid; place-items:center; border:2px solid #fff; border-radius:50%; background:#ffd77b; color:#785018; box-shadow:0 1px 3px #7252121f; }
-.current-alerts-preview { margin-bottom:22px; }
-.current-alerts-preview .panel-section-heading h2 { color:#9a6415; }
 .incident-card.information { background:#fff9ee; border-color:#eed9b6; }
 .incident-card.selected { outline:2px solid #d19438; outline-offset:2px; }
 .incident-card h3 { font-size:13px; margin:10px 0 5px; }
@@ -457,13 +454,6 @@ button svg,a svg { flex:none; }
 .legend-heading { min-height:40px; cursor:pointer; }
 .map-legend:not(.open) { padding-bottom:0; }
 .map-locate-button { min-width:44px; min-height:44px; }
-.alert-shortcuts { display:grid; gap:7px; }
-.alert-shortcut { width:100%; min-height:58px; display:flex; align-items:center; gap:10px; padding:11px 12px; border-radius:12px; border:1px solid #edd88b; background:#fffae9; color:#956a16; text-align:left; }
-.alert-shortcut.interrupted { background:#fff0ef; color:#ac3f46; border-color:#efc3c7; }
-.alert-shortcut.information { background:#edf4ff; color:#345f99; border-color:#c9daf1; }
-.alert-shortcut>span { flex:1; display:grid; gap:3px; }
-.alert-shortcut strong { font-size:12px; }
-.alert-shortcut small { font-size:10px; opacity:.8; }
 @media (min-width:1550px) { .panel-intro { padding-bottom:14px; } }
 @media (min-width:701px) and (max-width:1090px) { .panel-intro h1 { font-size:22px; } }
 .stop-arrival-card>strong.imminent { font-size:14px; line-height:25px; letter-spacing:-.3px; }
