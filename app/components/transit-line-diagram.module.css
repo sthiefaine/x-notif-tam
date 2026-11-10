@@ -17,6 +17,13 @@
 .scroll { max-height: none; overflow: visible; margin: 10px -6px 0; padding: 0 6px; }
 .schematic { position: relative; }
 .track { position: absolute; left: calc(var(--diagram-axis) - 2.5px); width: 5px; border-radius: 8px; background: var(--diagram-line, #475569); opacity: .75; }
+.interruptedTrack { position:absolute; left:calc(var(--diagram-axis) - 3.5px); width:7px; border-radius:8px; background:repeating-linear-gradient(to bottom,#dc2638 0 9px,#252b34 9px 13px); pointer-events:none; }
+.interruptionNotices { display:grid; gap:8px; margin:12px 0; }
+.interruptionNotice { display:flex; gap:9px; padding:11px; border:1px solid #fecaca; border-radius:11px; background:#fff5f5; color:#b91c1c; }
+.interruptionNotice>svg { flex:none; margin-top:1px; }
+.interruptionNotice p { margin:0; min-width:0; }
+.interruptionNotice strong { display:block; font-size:11px; line-height:1.5; }
+.interruptionNotice small { display:block; margin-top:5px; font-size:10px; line-height:1.5; color:#9f4747; }
 .stations { list-style: none; padding: 0; margin: 0; }
 .stationRow { height: 60px; display: flex; align-items: center; margin: 0; }
 .stationButton { display: flex; align-items: center; gap: 11px; width: calc(100% - var(--diagram-axis) + 15px); margin-left: calc(var(--diagram-axis) - 15px); padding: 8px 7px 8px 5px; text-align: left; color: inherit; border: 0; border-radius: 10px; background: transparent; cursor: pointer; min-width: 0; }
@@ -28,6 +35,8 @@
 .stationName { display: grid; gap: 5px; min-width: 0; flex: 1; }
 .stationName strong { font-size: 12px; line-height: 1.3; font-weight: 700; }
 .stationName small { color: #8190a2; font-size: 9px; line-height: 1.3; }
+.interruptedStation .stationDot { border-color:#dc2638; }
+.interruptedStation .stationName small { color:#b91c1c; }
 .stopAlert { font-size: 11px; width: 17px; height: 17px; }
 .arrival { font-size: 10px; color: #397461; white-space: nowrap; padding: 5px 7px; background: #edf7f1; border-radius: 6px; }
 .vehicleTrack { position: absolute; top: 0; left: var(--diagram-axis); width: 0; height: 100%; pointer-events: none; }
@@ -40,6 +49,7 @@
 .legendVehicle { background: #4584a4; }
 .legendStale { background: #a3aab4; }
 .legendProlonged { background: #a78bce; }
+.legend .legendInterruption { width:16px; height:4px; border-radius:2px; background:repeating-linear-gradient(to right,#dc2638 0 6px,#252b34 6px 9px); }
 .unplaced { display: grid; gap: 5px; margin-top: 14px; padding-top: 10px; border-top: 1px solid #eef1f5; }
 .unplaced > strong { font-size: 10px; line-height: 1.5; color: #758298; margin-bottom: 3px; }
 .unplaced button { display: flex; gap: 9px; text-align: left; border: 0; background: #f8fafc; padding: 8px; border-radius: 7px; cursor: pointer; font-size: 10px; color: #4d5d72; }

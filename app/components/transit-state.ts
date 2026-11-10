@@ -19,7 +19,7 @@ export function ageLabel(seconds: number): string {
 }
 
 export function alertActive(alert: LiveAlert, now: number): boolean {
-  return alert.periods.length === 0 || alert.periods.some(({ start, end }) => (!start || Date.parse(start) <= now) && (!end || Date.parse(end) >= now));
+  return !alert.timingUncertain && (alert.periods.length === 0 || alert.periods.some(({ start, end }) => (!start || Date.parse(start) <= now) && (!end || now < Date.parse(end))));
 }
 
 export function alertUpcoming(alert: LiveAlert, now: number): boolean {
@@ -42,10 +42,11 @@ export function geometryIsValid(geometry: LiveAlert["geometry"]): boolean {
 
 export function affectedLineFeatures(network: TransitNetwork, alerts: LiveAlert[], now: number) {
   return alerts.flatMap((alert) => {
-    if (!alertActive(alert, now) || alert.confidence !== "official" || !["works", "no_service"].includes(alert.category)) return [];
+    const interpreted = alert.interruption?.evidence === "explicit_text" && (alert.interruption.extent === "line" || alert.interruption.paths.length > 0);
+    if (!alertActive(alert, now) || (alert.confidence !== "official" && !interpreted) || !["works", "no_service"].includes(alert.category)) return [];
     const properties = { alertId: alert.id, category: alert.category, color: safeColor(network.routes.find((route) => alert.routeIds.includes(route.id))?.color), routeIds: alert.routeIds.join("|") };
     if (alert.scope === "segment" && geometryIsValid(alert.geometry)) return [{ type: "Feature" as const, id: alert.id, properties, geometry: alert.geometry! }];
-    if (alert.scope === "line" && alert.category === "no_service" && alert.classificationSource === "producer") return network.lineFeatures.features.filter((feature) => alert.routeIds.includes(feature.properties.routeId)).map((feature) => ({ type: "Feature" as const, id: `${alert.id}:${feature.id}`, properties, geometry: feature.geometry }));
+    if (alert.scope === "line" && alert.category === "no_service" && (alert.classificationSource === "producer" || alert.interruption?.extent === "line")) return network.lineFeatures.features.filter((feature) => alert.routeIds.includes(feature.properties.routeId) && (alert.interruption?.extent !== "line" || alert.interruption.directionId === undefined || feature.properties.direction === alert.interruption.directionId)).map((feature) => ({ type: "Feature" as const, id: `${alert.id}:${feature.id}`, properties, geometry: feature.geometry }));
     return [];
   });
 }

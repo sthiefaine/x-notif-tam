@@ -7,7 +7,7 @@ import { Icon } from "./transit-icons";
 import { RouteBadge } from "./transit-shell";
 import { ageLabel, observedAge, stopReference } from "./transit-state";
 import TransitLineDiagram from "./transit-line-diagram";
-import { stopServiceImpacts } from "@/lib/transit/alert-impacts";
+import { interruptionRangesForPattern, stopServiceImpacts } from "@/lib/transit/alert-impacts";
 
 export default function TransitStopDetail({ network, stop, routeId, arrivals, vehicles, alerts, now, onRouteChange, onStopSelect, onVehicleSelect, onBack, backLabel = "Retour au réseau" }: {
   network: TransitNetwork; stop: TransitStop; routeId: string | null; arrivals: LiveArrival[]; vehicles: LiveVehicle[]; alerts: LiveAlert[]; now: number;
@@ -17,7 +17,17 @@ export default function TransitStopDetail({ network, stop, routeId, arrivals, ve
   const [showAll, setShowAll] = useState(false);
   const routes = stop.routeIds.map((id) => network.routes.find((route) => route.id === id)).filter((route): route is TransitRoute => Boolean(route));
   const impacts = stopServiceImpacts(alerts, stop.id, routeId, now).filter((impact) => impact.serviceStatus === "not_served");
+  const interruptionStates = routes.filter((route) => !routeId || route.id === routeId).flatMap((route) => {
+    const ranges = (network.routePatterns || []).filter((pattern) => pattern.routeId === route.id && pattern.stopIds.includes(stop.id)).flatMap((pattern) => {
+      const index = pattern.stopIds.indexOf(stop.id);
+      return alerts.flatMap((alert) => interruptionRangesForPattern(alert, pattern, now)).filter((range) => range.wholeLine || index >= range.start && index <= range.end)
+        .map((range) => ({ inside: range.wholeLine || index > range.start && index < range.end }));
+    });
+    return ranges.length ? [{ route, inside: ranges.some((range) => range.inside) }] : [];
+  });
+  const interruptedRouteIds = new Set(interruptionStates.filter((state) => state.inside).map((state) => state.route.id));
   const next = arrivals.filter((arrival) => arrival.stopId === stop.id && (!routeId || arrival.routeId === routeId)
+    && !interruptedRouteIds.has(arrival.routeId)
     && !impacts.some((impact) => impact.temporalStatus === "active" && (!impact.routeIds.length || impact.routeIds.includes(arrival.routeId)))
     && arrival.freshness === "fresh" && observedAge(arrival.timestamp, now) <= 90
     && Date.parse(arrival.departureTime || arrival.arrivalTime || "") >= now - 30_000)
@@ -33,6 +43,7 @@ export default function TransitStopDetail({ network, stop, routeId, arrivals, ve
       {routes.map((route) => <button type="button" key={route.id} aria-pressed={routeId === route.id || routes.length === 1} aria-label={`Passages et parcours de la ligne ${route.shortName}`} onClick={() => { setDiagramRouteId(route.id); onRouteChange(route.id); setShowAll(false); }}><RouteBadge route={route} small /></button>)}
     </div>
     {impacts.map((impact) => <div key={impact.alertId} className={`stop-service-notice${impact.temporalStatus === "active" ? " active" : ""}`}><span aria-hidden="true"><Icon name="close" size={14} /></span><p><strong>{impact.routeIds.length ? `Ligne ${impact.routeIds.map((id) => routes.find((route) => route.id === id)?.shortName || id).join(", ")} · ` : ""}Non desservi{impact.temporalStatus === "upcoming" ? " prévu" : ""}</strong><small>{impact.temporalStatus === "upcoming" && impact.nextPeriod?.start ? new Intl.DateTimeFormat("fr-FR", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", timeZone: "Europe/Paris" }).format(new Date(impact.nextPeriod.start)) : impact.temporalStatus === "active" ? "En cours" : "Dates à confirmer"}</small></p></div>)}
+    {interruptionStates.map(({ route, inside }) => <div key={route.id} className="stop-service-notice active"><span aria-hidden="true"><Icon name="alert" size={14} /></span><p><strong>Ligne {route.shortName} · {inside ? "Circulation interrompue sur cette portion" : "Limite de l’interruption"}</strong><small>{inside ? "Passages à confirmer" : "La desserte de cet arrêt reste à vérifier"}</small></p></div>)}
     <div className="panel-section-heading stop-arrival-heading"><h3>Prochains passages</h3>{next.length ? <span className="arrival-live"><span />En direct</span> : null}</div>
     {next.length ? <><div className="stop-arrival-grid">{next.slice(0, showAll ? 6 : 3).map((arrival) => {
       const route = routes.find((item) => item.id === arrival.routeId);
@@ -40,7 +51,7 @@ export default function TransitStopDetail({ network, stop, routeId, arrivals, ve
       return <div className="stop-arrival-card" key={arrival.id} title={`Estimation actualisée il y a ${ageLabel(observedAge(arrival.timestamp, now))}`}>
         {route ? <RouteBadge route={route} small /> : null}<strong className={minutes === 0 ? "imminent" : undefined}>{minutes === 0 ? "Imminent" : <>{minutes}<small> min</small></>}</strong><span title={arrival.headsign || route?.name}>{arrival.headsign || route?.name || "Destination inconnue"}</span>
       </div>;
-    })}</div>{next.length > 3 ? <button type="button" className="stop-more-arrivals" aria-expanded={showAll} onClick={() => setShowAll((value) => !value)}>{showAll ? "Réduire" : `+ ${next.length - 3} passages`}<Icon name="chevron" size={13} /></button> : null}</> : <div className="stop-no-arrivals"><Icon name="clock" size={19} /><p>Passages en direct indisponibles.<small>Le service peut circuler sans prévision disponible.</small></p></div>}
+    })}</div>{next.length > 3 ? <button type="button" className="stop-more-arrivals" aria-expanded={showAll} onClick={() => setShowAll((value) => !value)}>{showAll ? "Réduire" : `+ ${next.length - 3} passages`}<Icon name="chevron" size={13} /></button> : null}</> : <div className="stop-no-arrivals"><Icon name="clock" size={19} /><p>{interruptedRouteIds.size ? "Aucun passage confirmé sur cette portion." : "Passages en direct indisponibles."}<small>{interruptedRouteIds.size ? "Une interruption est annoncée sur la ligne." : "Le service peut circuler sans prévision disponible."}</small></p></div>}
     {diagramRoute ? <TransitLineDiagram key={`${stop.id}:${diagramRoute.id}`} network={network} route={diagramRoute} vehicles={vehicles} arrivals={arrivals} alerts={alerts} selectedStopId={stop.id} now={now} onStopSelect={onStopSelect} onVehicleSelect={onVehicleSelect} /> : null}
   </>;
 }

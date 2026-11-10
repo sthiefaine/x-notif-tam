@@ -5,7 +5,7 @@ const realtime = loadTypeScript("lib/transit/realtime.ts");
 const stopMatching = loadTypeScript("lib/transit/stop-matching.ts");
 const dwell = loadTypeScript("lib/transit/dwell.ts", { mocks: { "./realtime": realtime, "./stop-matching": stopMatching } });
 const impacts = loadTypeScript("lib/transit/alert-impacts.ts");
-const alerts = loadTypeScript("lib/transit/live-alerts.ts", { mocks: { "./realtime": realtime, "./dwell": dwell, "./alert-impacts": impacts } });
+const alerts = loadTypeScript("lib/transit/live-alerts.ts", { mocks: { "./realtime": realtime, "./dwell": dwell, "./alert-interruptions": loadTypeScript("lib/transit/alert-interruptions.ts"), "./alert-impacts": impacts } });
 const baseTime = Date.parse("2026-11-08T12:00:00Z");
 function fixtureNetwork() {
   const stops = ["A", "B", "C", "D"].map((id, index) => ({ id, name: id, lat: 43.6, lon: 3.8 + index * 0.002, routeIds: ["33"] }));

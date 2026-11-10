@@ -48,3 +48,20 @@ test("an active closure hides forecasts only for the affected line at a shared p
   assert.ok(!html.includes("Destination 1"));
   assert.ok(html.includes("Destination 2"));
 });
+
+test("an interrupted portion warns the traveller and hides its forecasts while other lines and boundary service remain distinct", () => {
+  const alert = { id: "interrupted", routeIds: ["1"], stopIds: [], periods: [], interruption: {
+    evidence: "explicit_text", extent: "segment", fromName: "Station 5", toName: "Station 7", paths: [{ directionId: 0, stopIds: ["s5", "s6", "s7"], patternIds: ["p1"] }],
+  } };
+  const html = render({ alerts: [alert] });
+  assert.ok(html.includes("Ligne 1 · Circulation interrompue sur cette portion"));
+  assert.ok(!html.includes("Destination 1")); assert.ok(html.includes("Destination 2"));
+  assert.ok(!html.includes("Non desservi"));
+  const boundary = render({ alerts: [alert], stop: stops[5], arrivals: [arrival("boundary", "1", 2, { stopId: "s5" })] });
+  assert.ok(boundary.includes("Limite de l’interruption")); assert.ok(boundary.includes("Destination 1"));
+  const onlyAffected = render({ alerts: [alert], routeId: "1" });
+  assert.ok(onlyAffected.includes("Aucun passage confirmé sur cette portion"));
+  assert.ok(!onlyAffected.includes("Le service peut circuler sans prévision disponible"));
+  alert.periods = [{ start: new Date(now + 60000).toISOString(), end: null }];
+  assert.ok(render({ alerts: [alert] }).includes("Destination 1"));
+});

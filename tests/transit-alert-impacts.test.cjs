@@ -8,7 +8,7 @@ const impacts = loadTypeScript("lib/transit/alert-impacts.ts");
 const realtime = loadTypeScript("lib/transit/realtime.ts");
 const stopMatching = loadTypeScript("lib/transit/stop-matching.ts");
 const dwell = loadTypeScript("lib/transit/dwell.ts", { mocks: { "./realtime": realtime, "./stop-matching": stopMatching } });
-const alerts = loadTypeScript("lib/transit/live-alerts.ts", { mocks: { "./realtime": realtime, "./dwell": dwell, "./alert-impacts": impacts } });
+const alerts = loadTypeScript("lib/transit/live-alerts.ts", { mocks: { "./realtime": realtime, "./dwell": dwell, "./alert-interruptions": loadTypeScript("lib/transit/alert-interruptions.ts"), "./alert-impacts": impacts } });
 const now = Date.parse("2026-11-08T16:15:27Z");
 const plain = (value) => JSON.parse(JSON.stringify(value));
 const iso = (value) => new Date(value).toISOString();

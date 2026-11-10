@@ -100,3 +100,24 @@ test("an announced stop closure changes from planned to active and expires with 
   assert.ok(render(now + 60000).includes("activeClosure"));
   assert.ok(!render(now + 120000).includes("Non desservi"));
 });
+
+test("a located interruption colours only its thermometer span without declaring its boundary platforms closed", () => {
+  const alert = { id: "segment", routeIds: ["A"], stopIds: [], periods: [], description: "Ligne interrompue entre Zebra et Milieu.", interruption: {
+    evidence: "explicit_text", extent: "segment", fromName: "Zebra", toName: "Milieu", paths: [{ directionId: 0, stopIds: ["z", "a", "m"], patternIds: ["p"] }],
+  } };
+  const render = (extra = {}) => renderToStaticMarkup(React.createElement(Diagram, { network, route, vehicles: [], alerts: [alert], now, ...extra }));
+  const html = render();
+  assert.ok(html.includes("Interruption · Zebra → Milieu"));
+  assert.ok(html.includes('class="interruptedTrack"'));
+  assert.ok(html.includes('height:120px'));
+  assert.ok(html.includes("limite de l’interruption"));
+  assert.ok(html.includes("sur la portion interrompue"));
+  assert.ok(!html.includes("Localisation de la perturbation non précisée"));
+  assert.ok(!html.includes("Non desservi"));
+  assert.ok(!html.includes("activeClosure"));
+  alert.periods = [{ start: new Date(now + 60000).toISOString(), end: new Date(now + 120000).toISOString() }];
+  assert.ok(render().includes("Prévu le"));
+  assert.ok(!render().includes('class="interruptedTrack"'));
+  assert.ok(render({ now: now + 60000 }).includes('class="interruptedTrack"'));
+  assert.ok(!render({ now: now + 120000 }).includes('class="interruptedTrack"'));
+});

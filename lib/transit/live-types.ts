@@ -89,6 +89,18 @@ export interface LiveStopImpact {
   directionId?: number;
 }
 export interface TimedStopImpact extends LiveStopImpact, AlertTiming { alertId: string }
+export type AlertInterruption = {
+  evidence: "explicit_text";
+  extent: "line";
+  directionId?: number;
+} | {
+  evidence: "explicit_text";
+  extent: "segment";
+  fromName: string;
+  toName: string;
+  /** Ordered, unambiguous GTFS portions. Empty when a named bound cannot be resolved. */
+  paths: { directionId: number | null; stopIds: string[]; patternIds: string[] }[];
+};
 export interface LiveAlert {
   id: string;
   routeIds: string[];
@@ -103,7 +115,7 @@ export interface LiveAlert {
   timingUncertain?: boolean;
   temporalStatus?: AlertTemporalStatus;
   nextPeriod?: AlertPeriod;
-  /** Separate from raw stopIds: explicit text is not segment geometry evidence. */
+  /** Platform closures are separate from raw stopIds and track interruption evidence. */
   stopImpacts?: LiveStopImpact[];
   cause: string;
   effect: string;
@@ -112,9 +124,11 @@ export interface LiveAlert {
   category: "no_service" | "works" | "other";
   classificationSource: "producer" | "keywords";
   geometry?: TransitLineFeature["geometry"];
+  /** An interruption of track service does not assert that its boundary stops are closed. */
+  interruption?: AlertInterruption;
   /** A route_reference is a display reference, never the incident's location. */
   mapAnchors?: {
-    kind: "affected_stop" | "route_reference";
+    kind: "affected_stop" | "route_reference" | "segment_boundary";
     routeId?: string;
     stopId: string;
     lat: number;

@@ -1,5 +1,17 @@
 import type { AlertPeriod, AlertTiming, LiveAlert, LiveStopImpact, TimedStopImpact } from "./live-types";
-import type { TransitNetwork, TransitTripLookup } from "./types";
+import type { TransitNetwork, TransitRoutePattern, TransitTripLookup } from "./types";
+
+/** Active track interruptions are distinct from platform closures. */
+export function interruptionRangesForPattern(alert: LiveAlert, pattern: TransitRoutePattern, now: number): { start: number; end: number; wholeLine: boolean }[] {
+  if (!alert.interruption || !alert.routeIds.includes(pattern.routeId) || alertTiming(alert, now).temporalStatus !== "active") return [];
+  if (alert.interruption.extent === "line") return alert.interruption.directionId === undefined || alert.interruption.directionId === pattern.directionId ? [{ start: 0, end: pattern.stopIds.length - 1, wholeLine: true }] : [];
+  return alert.interruption.paths.filter((path) => path.patternIds.includes(pattern.id) && path.directionId === pattern.directionId).flatMap((path) => {
+    const starts = pattern.stopIds.flatMap((id, index) => id === path.stopIds[0] ? [index] : []);
+    if (starts.length !== 1 || path.stopIds.length < 2) return [];
+    const start = starts[0], end = start + path.stopIds.length - 1;
+    return path.stopIds.every((id, index) => pattern.stopIds[start + index] === id) ? [{ start, end, wholeLine: false }] : [];
+  });
+}
 
 /** Pure helpers shared by the collector and the client; no clock or IO on import. */
 export function alertTiming(alert: Pick<LiveAlert, "periods" | "timingUncertain">, now = Date.now()): AlertTiming {

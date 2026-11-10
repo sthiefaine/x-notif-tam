@@ -6,7 +6,7 @@ import type { LiveAlert, LiveArrival, LiveVehicle } from "@/lib/transit/live-typ
 import { describeVehicle, nextTripDelays } from "./transit-vehicle-state";
 import TransitVehicleMarker from "./transit-vehicle-marker";
 import { Icon } from "./transit-icons";
-import { alertTiming, stopServiceImpacts } from "@/lib/transit/alert-impacts";
+import { alertTiming, interruptionRangesForPattern, stopServiceImpacts } from "@/lib/transit/alert-impacts";
 import styles from "./transit-line-diagram.module.css";
 
 export interface TransitLineDiagramProps {
@@ -95,7 +95,10 @@ export default function TransitLineDiagram({ network, route, vehicles, arrivals 
   const tripDelays = useMemo(() => nextTripDelays(arrivals, now), [arrivals, now]);
   const activeAlerts = useMemo(() => alerts.filter((alert) => alertTiming(alert, now).temporalStatus !== "expired"
     && (alert.routeIds.includes(route.id) || alert.routeIds.length === 0)), [alerts, now, route.id]);
-  const lineAlerts = activeAlerts.filter((alert) => !alert.stopIds.length && !alert.stopImpacts?.length);
+  const lineAlerts = activeAlerts.filter((alert) => !alert.interruption && !alert.stopIds.length && !alert.stopImpacts?.length);
+  const interruptionAlerts = activeAlerts.filter((alert, index, list) => alert.interruption && list.findIndex((item) => JSON.stringify(item.interruption) === JSON.stringify(alert.interruption)) === index)
+    .sort((a, b) => (b.interruption?.extent === "segment" ? Number(Boolean(b.interruption.paths.length)) : 1) - (a.interruption?.extent === "segment" ? Number(Boolean(a.interruption.paths.length)) : 1));
+  const interruptionRanges = pattern ? [...new Map(activeAlerts.flatMap((alert) => interruptionRangesForPattern(alert, pattern, now)).map((range) => [`${range.start}:${range.end}:${range.wholeLine}`, range])).values()] : [];
   const closureAlerts = activeAlerts.filter((alert) => alert.stopImpacts?.some((impact) => impact.serviceStatus === "not_served" && (!impact.routeIds.length || impact.routeIds.includes(route.id))));
   const arrivalsByStop = useMemo(() => {
     const result = new Map<string, LiveArrival>();
@@ -122,22 +125,29 @@ export default function TransitLineDiagram({ network, route, vehicles, arrivals 
     <div className={styles.heading}><span className={styles.lineBadge} style={{ color: route.textColor }}>{route.shortName}</span><h3>Parcours</h3><span className={styles.info} tabIndex={0} aria-label="Positions indicatives : touchez un véhicule pour le retrouver sur la carte." title="Positions indicatives : touchez un véhicule pour le retrouver sur la carte.">i</span></div>
     {patterns.length > 1 && pattern ? <label className={styles.variantPicker}><select aria-label="Variante du parcours" value={pattern.id} onChange={(event) => setChosenPatternId(event.target.value)}>{patterns.map((candidate) => <option key={candidate.id} value={candidate.id}>{labelPattern(candidate)}</option>)}</select></label> : pattern ? <p className={styles.destination}>{labelPattern(pattern)}</p> : null}
     {lineAlerts.length ? <div className={styles.lineAlerts} aria-label="Informations non localisées sur la ligne">{lineAlerts.map((alert) => <div key={alert.id}><span aria-hidden="true">!</span><p><strong>{alert.routeIds.length ? `Information ligne ${route.shortName}` : "Information réseau"}</strong><small>{alert.description || alert.header}</small><em>Localisation de la perturbation non précisée.</em></p></div>)}</div> : null}
+    {interruptionAlerts.length ? <div className={styles.interruptionNotices} aria-label="Interruptions annoncées sur la ligne">{interruptionAlerts.map((alert) => {
+      const timing = alertTiming(alert, now), interruption = alert.interruption!;
+      return <div className={styles.interruptionNotice} key={alert.id}><Icon name="alert" size={18} /><p><strong>{interruption.extent === "line" ? "Ligne entière interrompue" : `Interruption · ${interruption.fromName} → ${interruption.toName}`}</strong><small>{timing.temporalStatus === "upcoming" ? `Prévu le ${impactDate(timing.nextPeriod?.start)}` : timing.temporalStatus === "active" ? "En cours" : "Dates à confirmer"}{interruption.extent === "segment" ? interruption.paths.length ? alert.geometry ? " · portion repérée dans le texte TaM" : " · portion repérée, tracé à confirmer" : " · correspondance des arrêts à confirmer" : " · annoncé dans le texte TaM"}</small></p></div>;
+    })}</div> : null}
     {!selectedStopId ? closureAlerts.map((alert) => { const timing = alertTiming(alert, now); const affected = alert.stopImpacts!.filter((impact) => impact.serviceStatus === "not_served" && (!impact.routeIds.length || impact.routeIds.includes(route.id))); return <button type="button" key={alert.id} className={`${styles.closureNotice} ${timing.temporalStatus === "active" ? styles.closedNow : ""}`} onClick={() => onStopSelect?.(affected[0].stopId)}><span aria-hidden="true"><Icon name="close" size={14} /></span><span><strong>{affected.length} arrêt{affected.length > 1 ? "s" : ""} non desservi{affected.length > 1 ? "s" : ""}</strong><small>{timing.temporalStatus === "upcoming" ? `Prévu le ${impactDate(timing.nextPeriod?.start)}` : timing.temporalStatus === "active" ? "En cours" : "Dates à confirmer"}</small></span><span aria-hidden="true">→</span></button>; }) : null}
     {!pattern || !occurrences.length ? <p className={styles.empty}>L’ordre des arrêts de ce parcours n’est pas encore disponible.</p> : <>
       {windowStart > 0 ? <button type="button" className={styles.moreStops} onClick={() => setFullRoute(true)}>↑ {windowStart} arrêts en amont</button> : null}
       <div className={styles.scroll}><div className={styles.schematic} style={{ minHeight: visibleStops.length * ROW_HEIGHT }}>
         <div className={styles.track} aria-hidden="true" style={{ top: ROW_HEIGHT / 2, height: Math.max(0, visibleStops.length - 1) * ROW_HEIGHT }} />
+        {interruptionRanges.map((range, index) => { const start = Math.max(windowStart, range.start), end = Math.min(windowEnd - 1, range.end); return end > start ? <div key={index} className={styles.interruptedTrack} aria-hidden="true" style={{ top: ROW_HEIGHT / 2 + (start - windowStart) * ROW_HEIGHT, height: (end - start) * ROW_HEIGHT }} /> : null; })}
         <ol className={styles.stations}>{visibleStops.map(({ stop, sequence }, visibleIndex) => {
           const index = windowStart + visibleIndex;
           const repeated = pattern.stopIds.filter((id) => id === stop.id).length > 1;
           const stopAlerts = activeAlerts.filter((alert) => alert.stopIds.includes(stop.id));
           const closure = stopServiceImpacts(activeAlerts, stop.id, route.id, now, pattern.directionId).find((impact) => impact.serviceStatus === "not_served" && impact.temporalStatus !== "unknown");
+          const interrupted = interruptionRanges.some((range) => range.wholeLine || index > range.start && index < range.end);
+          const interruptionBoundary = !interrupted && interruptionRanges.some((range) => index === range.start || index === range.end);
           const arrival = !repeated ? arrivalsByStop.get(stop.id) : undefined;
-          const due = arrival && closure?.temporalStatus !== "active" ? Math.max(0, Math.ceil((Date.parse(arrival.departureTime || arrival.arrivalTime || "") - now) / 60_000)) : null;
+          const due = arrival && !interrupted && closure?.temporalStatus !== "active" ? Math.max(0, Math.ceil((Date.parse(arrival.departureTime || arrival.arrivalTime || "") - now) / 60_000)) : null;
           return <li key={`${pattern.id}:${index}`} className={styles.stationRow}>
-            <button type="button" className={`${styles.stationButton}${selectedStopId === stop.id ? ` ${styles.selected}` : ""}${closure ? ` ${closure.temporalStatus === "upcoming" ? styles.plannedClosure : styles.activeClosure}` : ""}`} onClick={() => onStopSelect?.(stop.id)} aria-pressed={selectedStopId === stop.id} aria-label={`${stop.name}, repère ${stop.id}${repeated ? `, passage ${sequence}` : ""}${closure ? closure.temporalStatus === "upcoming" ? ", non-desservi prévu" : ", non desservi" : stopAlerts.length ? ", information à cet arrêt" : ""}`}>
+            <button type="button" className={`${styles.stationButton}${selectedStopId === stop.id ? ` ${styles.selected}` : ""}${interrupted || interruptionBoundary ? ` ${styles.interruptedStation}` : ""}${closure ? ` ${closure.temporalStatus === "upcoming" ? styles.plannedClosure : styles.activeClosure}` : ""}`} onClick={() => onStopSelect?.(stop.id)} aria-pressed={selectedStopId === stop.id} aria-label={`${stop.name}, repère ${stop.id}${repeated ? `, passage ${sequence}` : ""}${closure ? closure.temporalStatus === "upcoming" ? ", non-desservi prévu" : ", non desservi" : interrupted ? ", sur la portion interrompue" : interruptionBoundary ? ", limite de l’interruption" : stopAlerts.length ? ", information à cet arrêt" : ""}`}>
               <span className={`${styles.stationDot}${index === 0 || index === occurrences.length - 1 ? ` ${styles.terminus}` : ""}`} aria-hidden="true">{closure ? <Icon name="close" size={12} /> : null}</span>
-              <span className={styles.stationName}><strong>{stop.name}</strong>{closure ? <small>{closure.temporalStatus === "upcoming" ? `Non desservi le ${impactDate(closure.nextPeriod?.start)}` : "Non desservi"}</small> : selectedStopId === stop.id || repeated || index === 0 || index === occurrences.length - 1 ? <small>{selectedStopId === stop.id ? "Cet arrêt" : repeated ? `Passage ${sequence}` : "Terminus"}</small> : null}</span>
+              <span className={styles.stationName}><strong>{stop.name}</strong>{closure ? <small>{closure.temporalStatus === "upcoming" ? `Non desservi le ${impactDate(closure.nextPeriod?.start)}` : "Non desservi"}</small> : interrupted || interruptionBoundary ? <small>{interrupted ? "Sur la portion interrompue" : "Limite de l’interruption"}</small> : selectedStopId === stop.id || repeated || index === 0 || index === occurrences.length - 1 ? <small>{selectedStopId === stop.id ? "Cet arrêt" : repeated ? `Passage ${sequence}` : "Terminus"}</small> : null}</span>
               {stopAlerts.length ? <span className={styles.stopAlert} title={stopAlerts.map((alert) => alert.header).join(" · ")} aria-label="Information à cet arrêt">!</span> : null}
               {due !== null ? <span className={styles.arrival} title="Prochain passage estimé sur ce quai">{due === 0 ? "Imminent" : `${due} min`}</span> : null}
             </button>
@@ -154,7 +164,7 @@ export default function TransitLineDiagram({ network, route, vehicles, arrivals 
         })}</div>
       </div></div>
       {windowEnd < occurrences.length ? <button type="button" className={styles.moreStops} onClick={() => setFullRoute(true)}>↓ {occurrences.length - windowEnd} arrêts ensuite</button> : null}
-      <div className={styles.legend}><span><i className={styles.legendVehicle} />Véhicules</span><span><i className={styles.legendProlonged} />Arrêt prolongé</span><span><i className={styles.legendStale} />Ancien</span></div>
+      <div className={styles.legend}>{interruptionRanges.length ? <span><i className={styles.legendInterruption} />Circulation interrompue</span> : null}<span><i className={styles.legendVehicle} />Véhicules</span><span><i className={styles.legendProlonged} />Arrêt prolongé</span><span><i className={styles.legendStale} />Ancien</span></div>
       {projections.some((item) => !item.projection) ? <details className={styles.unplaced}><summary>{projections.filter((item) => !item.projection).length} véhicules hors schéma</summary>{projections.filter((item) => !item.projection).map(({ vehicle }) => <button type="button" key={vehicle.id} onClick={() => onVehicleSelect?.(vehicle.id)}>Véhicule {vehicle.id}<span>Voir sur la carte →</span></button>)}</details> : null}
       {!routeVehicles.length ? <p className={styles.empty}>Positions indisponibles · le service peut circuler.</p> : null}
     </>}
