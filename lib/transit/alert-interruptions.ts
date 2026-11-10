@@ -9,6 +9,31 @@ const stationName = (text: string) => fold(text).split(" ").map((word) => word =
   .filter((word) => word !== "docteur" && !/^(?:18|19|20)\d{2}$/.test(word)).join(" ");
 const metres = (a: Coordinate, b: Coordinate) => Math.hypot((a[0] - b[0]) * Math.cos((a[1] + b[1]) * Math.PI / 360), a[1] - b[1]) * 111195;
 const pointValid = (p: Coordinate) => p.length === 2 && p.every(Number.isFinite) && Math.abs(p[0]) <= 180 && Math.abs(p[1]) <= 90;
+type StationReference = NonNullable<Extract<AlertInterruption, { extent: "segment" }>["stationReferences"]>[number];
+
+function matchStationName(label: string, routeStops: TransitStop[], network: TransitNetwork): { key: string; reference?: StationReference } | undefined {
+  const key = stationName(label);
+  if (routeStops.some((stop) => stationName(stop.name) === key)) return { key };
+  // A qualifier must first match a real named station. Unknown words are never
+  // stripped. Different quays in the same compact pole can then reference the
+  // line's own station, without changing the producer's name or closing a quay.
+  const named = network.stops.filter((stop) => stationName(stop.name) === key);
+  const compact = (stops: TransitStop[]) => stops.length > 0 && stops.every((stop) => pointValid([stop.lon, stop.lat])
+    && stops.every((other) => metres([stop.lon, stop.lat], [other.lon, other.lat]) <= 150));
+  if (!compact(named)) return;
+  const groups = new Map<string, TransitStop[]>();
+  for (const stop of routeStops) {
+    const name = stationName(stop.name), base = name.length < key.length ? name : key, qualified = name.length < key.length ? key : name;
+    if (base.split(" ").length < 3 || !qualified.startsWith(base + " ")) continue;
+    groups.set(name, [...(groups.get(name) || []), stop]);
+  }
+  const candidates = [...groups].flatMap(([name, stops]) => {
+    if (!compact(stops)) return [];
+    const distance = Math.max(...stops.flatMap((stop) => named.map((other) => metres([stop.lon, stop.lat], [other.lon, other.lat]))));
+    return distance <= 100 ? [{ key: name, reference: { sourceName: label, matchedName: stops[0].name, distanceMetres: Math.ceil(distance), evidence: "nearby_named_station" as const } }] : [];
+  });
+  return candidates.length === 1 ? candidates[0] : undefined;
+}
 
 function affirmative(sentence: string) {
   const value = fold(sentence);
@@ -116,9 +141,8 @@ export function deriveInterruption(selectors: readonly Selector[], routeIds: str
   const only = directions.size === 1 ? [...directions][0] : undefined;
   const direction = only === 0 || only === 1 ? only : undefined;
   const stops = network.stops.filter((stop) => stop.routeIds.includes(routeId));
-  const known = new Set(stops.map((stop) => stationName(stop.name)));
   const sentences = description.slice(0, 8000).replace(/\b(st|ste|dr)\.\s*/gi, "$1 ").split(/[.!?;\n]/).filter(affirmative);
-  const results: { from: string; to: string; resolved: boolean }[] = [];
+  const results: { from: string; to: string; fromKey?: string; toKey?: string; references?: StationReference[] }[] = [];
   let wholeLine = false;
   for (const sentence of sentences) {
     const wording = fold(sentence);
@@ -136,16 +160,20 @@ export function deriveInterruption(selectors: readonly Selector[], routeIds: str
       .replace(/\s+(?:dans les deux sens|en direction de|avec report|report aux)\b.*$/i, "").trim();
     const joins = [...phrase.matchAll(/\s+et\s+/gi)].slice(0, 8);
     const pairs = joins.map((join) => ({ from: phrase.slice(0, join.index).trim(), to: phrase.slice(join.index! + join[0].length).trim() }));
-    const resolved = pairs.filter((pair) => known.has(stationName(pair.from)) && known.has(stationName(pair.to)) && stationName(pair.from) !== stationName(pair.to));
-    if (resolved.length === 1) results.push({ ...resolved[0], resolved: true });
-    else if (pairs.length === 1) results.push({ ...pairs[0], resolved: false });
+    const resolved = pairs.flatMap((pair) => {
+      const from = matchStationName(pair.from, stops, network), to = matchStationName(pair.to, stops, network);
+      return from && to && from.key !== to.key ? [{ ...pair, fromKey: from.key, toKey: to.key, references: [from.reference, to.reference].filter((reference): reference is StationReference => Boolean(reference)) }] : [];
+    });
+    if (resolved.length === 1) results.push(resolved[0]);
+    else if (pairs.length === 1) results.push(pairs[0]);
   }
   if (wholeLine) return results.length ? undefined : { interruption: { evidence: "explicit_text", extent: "line", ...(direction === undefined ? {} : { directionId: direction }) } };
   const unique = new Map(results.map((result) => [`${stationName(result.from)}:${stationName(result.to)}`, result]));
   if (unique.size !== 1) return;
   const bound = [...unique.values()][0];
-  const paths = bound.resolved ? resolvePaths(stationName(bound.from), stationName(bound.to), routeId, direction, network, lookup) : [];
-  const interruption: AlertInterruption = { evidence: "explicit_text", extent: "segment", fromName: bound.from, toName: bound.to, paths };
+  const paths = bound.fromKey && bound.toKey ? resolvePaths(bound.fromKey, bound.toKey, routeId, direction, network, lookup) : [];
+  const interruption: AlertInterruption = { evidence: "explicit_text", extent: "segment", fromName: bound.from, toName: bound.to, paths,
+    ...(paths.length && bound.references?.length ? { stationReferences: bound.references } : {}) };
   const byId = new Map(network.stops.map((stop) => [stop.id, stop]));
   if (!paths.length || selectors.some((selector) => selector.stopId && !paths.some((path) => path.stopIds.includes(selector.stopId!)))) {
     return { interruption: { ...interruption, paths: [] } };

@@ -115,6 +115,9 @@ test("a located interruption colours only its thermometer span without declaring
   assert.ok(!html.includes("Localisation de la perturbation non précisée"));
   assert.ok(!html.includes("Non desservi"));
   assert.ok(!html.includes("activeClosure"));
+  alert.interruption.stationReferences = [{ sourceName: "Zebra République", matchedName: "Zebra", distanceMetres: 75, evidence: "nearby_named_station" }];
+  alert.geometry = { type: "LineString", coordinates: stops.map((stop) => [stop.lon, stop.lat]) };
+  assert.ok(render().includes("repère au pôle Zebra"));
   alert.periods = [{ start: new Date(now + 60000).toISOString(), end: new Date(now + 120000).toISOString() }];
   assert.ok(render().includes("Prévu le"));
   assert.ok(!render().includes('class="interruptedTrack"'));

@@ -98,6 +98,8 @@ export type AlertInterruption = {
   extent: "segment";
   fromName: string;
   toName: string;
+  /** A nearby named station is used as a route reference, never as an exact quay alias. */
+  stationReferences?: { sourceName: string; matchedName: string; distanceMetres: number; evidence: "nearby_named_station" }[];
   /** Ordered, unambiguous GTFS portions. Empty when a named bound cannot be resolved. */
   paths: { directionId: number | null; stopIds: string[]; patternIds: string[] }[];
 };

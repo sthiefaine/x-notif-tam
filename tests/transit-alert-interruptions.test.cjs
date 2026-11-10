@@ -50,7 +50,7 @@ test("real Rondelet–Beaux-Arts text resolves both directions and clips only th
   }
 });
 
-test("Saint abbreviations and optional titles resolve, but a distinguishing République qualifier is never discarded", () => {
+test("Saint abbreviations and optional titles resolve while unknown station qualifiers remain unresolved", () => {
   const alert = normalize("Manifestation : ligne 5 interrompue entre les stations St Eloi Pezet et Place du 8 mai.", { informedEntity: [{ routeId: "5" }] }, { network: realNetwork, lookup: realLookup });
   assert.equal(alert.interruption.paths.length, 2);
   assert.equal(alert.geometry.type, "MultiLineString");
@@ -60,11 +60,56 @@ test("Saint abbreviations and optional titles resolve, but a distinguishing Rép
     assert.ok(coordinates.length > 20);
     assert.ok(coordinates.every(([lon, lat]) => lat > 43.600 && lat < 43.629 && lon > 3.858 && lon < 3.883), "only Saint-Eloi–Place du 8 Mai is drawn, not Clapiers or Grés de Montpellier");
   }
-  const unresolved = normalize("Ligne 2 interrompue entre Gare St Roch République et Beaux Arts.", {}, { network: realNetwork, lookup: realLookup });
-  assert.equal(unresolved.interruption.fromName, "Gare St Roch République");
+  const unresolved = normalize("Ligne 2 interrompue entre Gare St Roch Quai Inconnu et Beaux Arts.", {}, { network: realNetwork, lookup: realLookup });
+  assert.equal(unresolved.interruption.fromName, "Gare St Roch Quai Inconnu");
   assert.deepEqual(plain(unresolved.interruption.paths), []);
   assert.equal(unresolved.geometry, undefined);
   assert.equal(ui.affectedLineFeatures(realNetwork, [unresolved], now).length, 0);
+});
+
+test("Gare Saint-Roch République uses the nearby named station pole for lines 1 and 2, preserving the producer wording", () => {
+  for (const [id, text] of [
+    ["1", "En raison d'une manifestation, la ligne 1 est interrompue dans les deux sens entre Saint Eloi et Gare St Roch République."],
+    ["2", "Suite à manifestation ligne 2 interrompue entre Gare St Roch République et Beaux Arts."],
+  ]) {
+    const alert = normalize(text, { informedEntity: [{ routeId: id }] }, { network: realNetwork, lookup: realLookup });
+    assert.equal(alert.geometry.type, "MultiLineString"); assert.equal(alert.interruption.paths.length, 2);
+    assert.ok([alert.interruption.fromName, alert.interruption.toName].includes("Gare St Roch République"));
+    const reference = alert.interruption.stationReferences[0];
+    assert.equal(reference.sourceName, "Gare St Roch République"); assert.equal(reference.matchedName, "Gare Saint-Roch");
+    assert.equal(reference.evidence, "nearby_named_station"); assert.ok(reference.distanceMetres <= 100);
+    assert.deepEqual(plain(alert.stopIds), []); assert.deepEqual(plain(alert.stopImpacts), []);
+    assert.equal(ui.affectedLineFeatures(realNetwork, [alert], now).length, 1);
+    for (const line of alert.geometry.coordinates) {
+      assert.ok(line.length > 2); assert.ok(line.every((point) => point[1] >= 43.604 && point[1] < 43.63));
+    }
+  }
+});
+
+test("a pole reference requires a real qualified station, one nearby route name, and compact quays", () => {
+  const make = (mode) => {
+    const data = fixture();
+    data.network.stops[0].name = "Gare Grand Centre";
+    const source = { id: "other-line", name: "Gare Grand Centre République", lat: 43.6006, lon: 3.8, routeIds: ["99"] };
+    if (mode !== "unknown") data.network.stops.push(source);
+    if (mode === "far") source.lat += .01;
+    if (mode === "dispersed") data.network.stops.push({ ...source, id: "same-name-far", lat: 43.62 });
+    return data;
+  };
+  const text = "Ligne 2 interrompue entre Gare Grand Centre République et Delta.";
+  assert.ok(normalize(text, {}, make("valid")).geometry);
+  for (const mode of ["unknown", "far", "dispersed"]) {
+    const alert = normalize(text, {}, make(mode));
+    assert.equal(alert.geometry, undefined, mode); assert.deepEqual(plain(alert.interruption.paths), [], mode);
+  }
+  // Known quays at Pont de Sète are farther away: sharing 'Gare Saint-Roch' is insufficient.
+  assert.equal(normalize("Ligne 2 interrompue entre Gare Saint-Roch Pont de Sète et Beaux-Arts.", {}, { network: realNetwork, lookup: realLookup }).geometry, undefined);
+  const ambiguous = make("valid");
+  ambiguous.network.stops.find((stop) => stop.id === "other-line").name = "Gare Grand Centre Sud République";
+  ambiguous.network.stops.push({ id: "second-route-name", name: "Gare Grand Centre Sud", lat: 43.6, lon: 3.8, routeIds: ["2"] });
+  const result = normalize("Ligne 2 interrompue entre Gare Grand Centre Sud République et Delta.", {}, ambiguous);
+  assert.equal(result.geometry, undefined);
+  assert.deepEqual(plain(result.interruption.paths), []);
 });
 
 test("one isolated intermediate quay offset does not erase an otherwise verified official segment", () => {
