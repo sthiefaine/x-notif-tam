@@ -61,10 +61,17 @@ function clipPath(stops: TransitStop[], routeId: string, direction: number | nul
       if (coordinates.length < 2 || coordinates.length > 5000 || !coordinates.every(pointValid)) continue;
       const matches = stops.map((stop) => {
         const ranked = projections([stop.lon, stop.lat], coordinates), first = ranked[0];
-        return first && first.distance <= 60 && !ranked.some((other) => other.distance <= first.distance + 3 && Math.abs(other.along - first.along) > 80) ? first : undefined;
+        return first && first.distance <= 100 && !ranked.some((other) => other.distance <= first.distance + 3 && Math.abs(other.along - first.along) > 80) ? first : undefined;
       });
       if (matches.some((match) => !match)) continue;
       const resolved = matches as Projection[];
+      // A shared GTFS quay can be offset from this line's official rails (e.g.
+      // Gambetta on T5). Bounds always keep the 60 m limit. Only one internal
+      // offset up to 100 m is accepted, bracketed by two close matches, on a
+      // portion with at least five stops. It never changes the clipped trace.
+      const offsets = resolved.flatMap((match, index) => match.distance > 60 ? [index] : []);
+      if (offsets.length && (resolved.length < 5 || offsets.length > 1 || offsets.some((index) => index === 0 || index === resolved.length - 1
+        || resolved[index - 1].distance > 30 || resolved[index + 1].distance > 30))) continue;
       const sign = Math.sign(resolved[resolved.length - 1].along - resolved[0].along);
       if (!sign || resolved.some((match, index) => index > 0 && (match.along - resolved[index - 1].along) * sign < 1)) continue;
       const [first, last] = [resolved[0], resolved[resolved.length - 1]].sort((a, b) => a.position - b.position);

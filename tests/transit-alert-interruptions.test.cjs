@@ -53,11 +53,38 @@ test("real Rondelet–Beaux-Arts text resolves both directions and clips only th
 test("Saint abbreviations and optional titles resolve, but a distinguishing République qualifier is never discarded", () => {
   const alert = normalize("Manifestation : ligne 5 interrompue entre les stations St Eloi Pezet et Place du 8 mai.", { informedEntity: [{ routeId: "5" }] }, { network: realNetwork, lookup: realLookup });
   assert.equal(alert.interruption.paths.length, 2);
+  assert.equal(alert.geometry.type, "MultiLineString");
+  assert.equal(alert.geometry.coordinates.length, 2);
+  assert.equal(ui.affectedLineFeatures(realNetwork, [alert], now).length, 1);
+  for (const coordinates of alert.geometry.coordinates) {
+    assert.ok(coordinates.length > 20);
+    assert.ok(coordinates.every(([lon, lat]) => lat > 43.600 && lat < 43.629 && lon > 3.858 && lon < 3.883), "only Saint-Eloi–Place du 8 Mai is drawn, not Clapiers or Grés de Montpellier");
+  }
   const unresolved = normalize("Ligne 2 interrompue entre Gare St Roch République et Beaux Arts.", {}, { network: realNetwork, lookup: realLookup });
   assert.equal(unresolved.interruption.fromName, "Gare St Roch République");
   assert.deepEqual(plain(unresolved.interruption.paths), []);
   assert.equal(unresolved.geometry, undefined);
   assert.equal(ui.affectedLineFeatures(realNetwork, [unresolved], now).length, 0);
+});
+
+test("one isolated intermediate quay offset does not erase an otherwise verified official segment", () => {
+  const make = (offsets) => {
+    const data = fixture();
+    data.network.stops = ["Alpha", "Bravo", "Charlie", "Delta", "Echo", "Foxtrot", "Golf"].map((name, index) => ({ id: String(index), name, lat: 43.6, lon: 3.8 + index * .003, routeIds: ["2"] }));
+    const pattern = data.lookup.patterns.p;
+    pattern.stopIds = data.network.stops.map((stop) => stop.id); pattern.stopSequences = pattern.stopIds.map((_, i) => i + 1);
+    data.network.lineFeatures.features[0].geometry.coordinates = data.network.stops.map((stop) => [stop.lon, stop.lat]);
+    for (const [index, distance] of offsets) data.network.stops[index].lat += distance / 111195;
+    return data;
+  };
+  const text = "Ligne 2 interrompue entre Alpha et Golf.";
+  const accepted = normalize(text, {}, make([[3, 72]]));
+  assert.ok(accepted.geometry);
+  assert.ok(accepted.geometry.coordinates.every((coordinate) => coordinate[1] === 43.6), "the offset quay does not pull the line away from the official rails");
+  for (const [label, offsets] of [
+    ["distant bound", [[0, 72]]], ["unbounded internal offset", [[3, 105]]],
+    ["two offsets", [[2, 72], [4, 72]]], ["poor neighbouring match", [[2, 40], [3, 72]]],
+  ]) assert.equal(normalize(text, {}, make(offsets)).geometry, undefined, label);
 });
 
 test("only explicit whole-line wording can classify a textual whole-line interruption", () => {
