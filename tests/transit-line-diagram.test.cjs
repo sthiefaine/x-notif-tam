@@ -124,3 +124,21 @@ test("a located interruption colours only its thermometer span without declaring
   assert.ok(render({ now: now + 60000 }).includes('class="interruptedTrack"'));
   assert.ok(!render({ now: now + 120000 }).includes('class="interruptedTrack"'));
 });
+
+test("a located detour has its own span and labels, without inventing closed platforms or a replacement route", () => {
+  const alert = { id: "detour", category: "detour", routeIds: ["A"], stopIds: [], periods: [], description: "Ligne déviée entre Zebra et Milieu.", detour: {
+    evidence: "explicit_text", extent: "segment", fromName: "Zebra", toName: "Milieu", paths: [{ directionId: 0, stopIds: ["z", "a", "m"], patternIds: ["p"] }],
+  }, geometry: { type: "LineString", coordinates: stops.map((stop) => [stop.lon, stop.lat]) } };
+  const render = (at) => renderToStaticMarkup(React.createElement(Diagram, { network, route, vehicles: [], alerts: [alert], now: at }));
+  const html = render(now);
+  assert.ok(html.includes("Déviation · Zebra → Milieu"));
+  assert.ok(html.includes("detourTrack"));
+  assert.ok(html.includes("sur la portion déviée"));
+  assert.ok(html.includes("Itinéraire de report non fourni"));
+  assert.ok(!html.includes("Non desservi"));
+  assert.ok(!html.includes("Localisation de la perturbation non précisée"));
+  alert.periods = [{ start: new Date(now + 60000).toISOString(), end: new Date(now + 120000).toISOString() }];
+  assert.ok(!render(now).includes("detourTrack"));
+  assert.ok(render(now + 60000).includes("detourTrack"));
+  assert.ok(!render(now + 120000).includes("detourTrack"));
+});

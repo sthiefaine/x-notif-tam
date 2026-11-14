@@ -27,6 +27,76 @@ function normalize(description, extra = {}, data = fixture()) {
     descriptionText: { translation: [{ text: description, language: "fr" }] }, ...extra } }] }, data.network, data.lookup)[0];
 }
 
+test("November 14: numeric two-way wording does not become part of Saint-Denis", () => {
+  const alert = normalize("Suite à une manifestation, la ligne 3 est interrompue entre les stations Jules Guesde et Saint-Denis dans les 2 sens. ",
+    { informedEntity: [{ routeId: "3" }], effect: "MODIFIED_SERVICE" }, { network: realNetwork, lookup: realLookup });
+  assert.equal(alert.interruption.toName, "Saint-Denis");
+  assert.equal(alert.interruption.paths.length, 2);
+  assert.ok(alert.interruption.stationReferences.every((reference) => reference.distanceMetres <= 250));
+  assert.equal(alert.geometry.type, "MultiLineString");
+  assert.equal(ui.affectedLineFeatures(realNetwork, [alert], now).length, 1);
+});
+
+test("November 14: a named line with PAS DE SERVICE is a complete interruption despite a generic producer effect", () => {
+  const alert = normalize('MANIFESTATION : Ligne 4 "PAS DE SERVICE" La ligne est interrompue suite à manifestation à venir. ',
+    { informedEntity: [{ routeId: "4" }], effect: "MODIFIED_SERVICE" }, { network: realNetwork, lookup: realLookup });
+  assert.equal(alert.category, "no_service");
+  assert.equal(alert.classificationSource, "keywords");
+  assert.equal(alert.interruption.extent, "line");
+  assert.ok(ui.affectedLineFeatures(realNetwork, [alert], now).length > 0);
+  assert.equal(ui.affectedLineFeatures(realNetwork, [{ ...alert, periods: [{ start: new Date(now + 60000).toISOString(), end: null }] }], now).length, 0);
+});
+
+test("November 14: line une and Pl Europe identify the usual detoured portion, never a replacement itinerary", () => {
+  const alert = normalize("Manifestation:La ligne une est déviée dans les 2 sens, entre Corum et Pl Europe. Secteur Comédie, Gare à L. Blum non desservi. ",
+    { informedEntity: [{ routeId: "1" }], effect: "MODIFIED_SERVICE" }, { network: realNetwork, lookup: realLookup });
+  assert.equal(alert.category, "detour");
+  assert.equal(alert.interruption, undefined);
+  assert.equal(alert.detour.fromName, "Corum");
+  assert.equal(alert.detour.toName, "Pl Europe");
+  assert.equal(alert.detour.paths.length, 2);
+  assert.equal(alert.geometry.type, "MultiLineString");
+  assert.equal(ui.affectedLineFeatures(realNetwork, [alert], now).length, 1);
+  assert.equal(ui.affectedLineFeatures(realNetwork, [{ ...alert, periods: [{ start: new Date(now + 60000).toISOString(), end: null }] }], now).length, 0);
+  const byId = new Map(realNetwork.stops.map((s) => [s.id, s]));
+  for (const path of alert.detour.paths) {
+    assert.deepEqual(new Set([byId.get(path.stopIds[0]).name, byId.get(path.stopIds.at(-1)).name]), new Set(["Corum", "Place de l'Europe"]));
+  }
+  for (const pattern of realNetwork.routePatterns.filter((pattern) => pattern.routeId === "1")) {
+    const covered = alert.detour.paths.some((path) => path.patternIds.includes(pattern.id));
+    assert.equal(impacts.detourRangesForPattern(alert, pattern, now).length > 0, covered);
+    assert.equal(impacts.interruptionRangesForPattern(alert, pattern, now).length, 0);
+    assert.equal(impacts.detourRangesForPattern({ ...alert, timingUncertain: true }, pattern, now).length, 0);
+  }
+});
+
+test("the legacy Saint-Denis sector reference requires the current named anchor and nearby T3 quays", () => {
+  for (const mode of ["missing anchor", "distant quay"]) {
+    const network = plain(realNetwork);
+    if (mode === "missing anchor") network.stops = network.stops.filter((stop) => stop.name !== "Gambetta - Saint-Denis");
+    else network.stops.find((stop) => stop.name === "Gambetta - Chaptal").lat += .01;
+    const alert = normalize("Ligne 3 interrompue entre Jules Guesde et Saint-Denis dans les 2 sens.",
+      { informedEntity: [{ routeId: "3" }] }, { network, lookup: realLookup });
+    assert.deepEqual(plain(alert.interruption.paths), [], mode);
+    assert.equal(alert.geometry, undefined, mode);
+  }
+});
+
+test("detours remain unresolved for unknown bounds, other named lines, hypothetical or ended wording", () => {
+  for (const text of ["Ligne 2 pourrait être déviée entre Alpha et Delta.", "Ligne 2 n'est plus déviée entre Alpha et Delta.",
+    "Fin de la déviation de la ligne 2 entre Alpha et Delta.", "Ligne une est déviée entre Alpha et Delta."]) {
+    assert.equal(normalize(text).detour, undefined, text);
+  }
+  const unknown = normalize("Ligne 2 est déviée entre Alpha et Destination inconnue.");
+  assert.equal(unknown.category, "detour");
+  assert.deepEqual(plain(unknown.detour.paths), []);
+  assert.equal(ui.affectedLineFeatures(fixture().network, [unknown], now).length, 0);
+  const generic = normalize("Déviation possible.", { effect: "DETOUR" });
+  assert.equal(generic.category, "detour");
+  assert.equal(generic.geometry, undefined);
+  assert.equal(ui.affectedLineFeatures(fixture().network, [generic], now).length, 0);
+});
+
 test("real Rondelet–Beaux-Arts text resolves both directions and clips only the official track between them", () => {
   const alert = normalize("Suite à manifestation ligne 2 interrompue entre Rondelet et Beaux-Arts.", {}, { network: realNetwork, lookup: realLookup });
   assert.equal(alert.category, "no_service"); assert.equal(alert.scope, "segment");

@@ -4,7 +4,7 @@ import type { RealtimeFeed } from "./realtime";
 import { unixMilliseconds } from "./realtime";
 import { distanceMetres } from "./dwell";
 import { alertTiming, deriveStopImpacts } from "./alert-impacts";
-import { deriveInterruption } from "./alert-interruptions";
+import { deriveDetour, deriveInterruption } from "./alert-interruptions";
 export { alertTiming, stopImpactForRoute, stopServiceImpacts } from "./alert-impacts";
 
 const causes: Record<number, string> = { 1: "UNKNOWN_CAUSE", 2: "OTHER_CAUSE", 3: "TECHNICAL_PROBLEM", 4: "STRIKE", 5: "DEMONSTRATION", 6: "ACCIDENT", 7: "HOLIDAY", 8: "WEATHER", 9: "MAINTENANCE", 10: "CONSTRUCTION", 11: "POLICE_ACTIVITY", 12: "MEDICAL_EMERGENCY" };
@@ -98,6 +98,7 @@ function segmentGeometry(routeId: string, stopIds: string[], description: string
 export function normalizeAlerts(feed: RealtimeFeed, network: TransitNetwork, lookup: TransitTripLookup): LiveAlert[] {
   const alerts: LiveAlert[] = [];
   const interpretations = new Map<string, ReturnType<typeof deriveInterruption>>();
+  const detours = new Map<string, ReturnType<typeof deriveDetour>>();
   const knownRouteIds = new Set(network.routes.map((route) => route.id));
   for (const entity of (feed.entity ?? []).slice(0, 1000)) {
     if (!entity.id || entity.isDeleted || !entity.alert) continue;
@@ -117,7 +118,9 @@ export function normalizeAlerts(feed: RealtimeFeed, network: TransitNetwork, loo
     const interpretationKey = JSON.stringify([selectors, routeIds, description, header]);
     if (!interpretations.has(interpretationKey)) interpretations.set(interpretationKey, deriveInterruption(selectors, routeIds, `${description}\n${header}`, network, lookup));
     const interpreted = interpretations.get(interpretationKey);
-    const geometry = interpreted?.geometry ?? (routeIds.length === 1 && !interpreted ? segmentGeometry(routeIds[0], stopIds, `${header} ${description}`, network, lookup) : undefined);
+    if (!detours.has(interpretationKey)) detours.set(interpretationKey, !interpreted && effect !== "NO_SERVICE" ? deriveDetour(selectors, routeIds, `${description}\n${header}`, network, lookup) : undefined);
+    const detoured = detours.get(interpretationKey);
+    const geometry = interpreted?.geometry ?? detoured?.geometry ?? (routeIds.length === 1 && !interpreted && !detoured ? segmentGeometry(routeIds[0], stopIds, `${header} ${description}`, network, lookup) : undefined);
     const periods = (raw.activePeriod ?? []).slice(0, 100).map((period) => {
       const start = unixMilliseconds(period.start), end = unixMilliseconds(period.end);
       return { start: start === null ? null : new Date(start).toISOString(), end: end === null ? null : new Date(end).toISOString() };
@@ -129,12 +132,12 @@ export function normalizeAlerts(feed: RealtimeFeed, network: TransitNetwork, loo
     alerts.push({ id: entity.id, routeIds, rawRouteIds, routeAssociation, stopIds, header, description,
       periods, ...(timingUncertain ? { timingUncertain } : {}), stopImpacts,
       cause, effect,
-      scope: interpreted?.interruption.extent === "segment" || geometry ? "segment" : stopIds.length ? "stops" : routeIds.length ? "line" : "network",
-      confidence: interpreted || keywordWorks || geometry ? "estimated" : "official",
-      category: interpreted || effect === "NO_SERVICE" ? "no_service" : producerWorks || keywordWorks ? "works" : "other",
-      classificationSource: interpreted || keywordWorks && effect !== "NO_SERVICE" ? "keywords" : "producer",
-      geometry, ...(interpreted ? { interruption: interpreted.interruption } : {}),
-      mapAnchors: interpreted?.anchors ?? mapAnchors(routeIds, stopIds, network, lookup),
+      scope: interpreted?.interruption.extent === "segment" || detoured?.detour.extent === "segment" || geometry ? "segment" : stopIds.length ? "stops" : routeIds.length ? "line" : "network",
+      confidence: interpreted || detoured || keywordWorks || geometry ? "estimated" : "official",
+      category: interpreted || effect === "NO_SERVICE" ? "no_service" : detoured || effect === "DETOUR" ? "detour" : producerWorks || keywordWorks ? "works" : "other",
+      classificationSource: interpreted || detoured || keywordWorks && effect !== "NO_SERVICE" ? "keywords" : "producer",
+      geometry, ...(interpreted ? { interruption: interpreted.interruption } : {}), ...(detoured ? { detour: detoured.detour } : {}),
+      mapAnchors: interpreted?.anchors ?? detoured?.anchors ?? mapAnchors(routeIds, stopIds, network, lookup),
     });
   }
   return alerts;
