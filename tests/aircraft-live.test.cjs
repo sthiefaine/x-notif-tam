@@ -73,7 +73,7 @@ test("one shared cache request serves concurrent users and cannot fetch more oft
   const api = module();
   const cache = new api.AircraftCache({ now: () => now, fetcher: async (url, options) => {
     requests++;
-    assert.equal(url, "https://api.adsb.lol/v2/point/43.6108/3.8767/11");
+    assert.equal(url, "https://opendata.adsb.fi/api/v3/lat/43.6108/lon/3.8767/dist/11");
     assert.equal(options.cache, "no-store");
     assert.equal(Object.hasOwn(options.headers, "Authorization"), false);
     return new Response(JSON.stringify(body([helicopter()], now)));
@@ -118,7 +118,79 @@ test("successful empty results remain explicitly incomplete rather than proving 
   assert.equal(snapshot.meta.coverage, "incomplete");
   assert.match(snapshot.meta.coverageMessage, /ne prouve pas/);
   assert.equal(snapshot.aircraft.length, 0);
-  assert.equal(snapshot.meta.source.licence.name, "ODbL 1.0");
+  assert.equal(snapshot.meta.source.licence.name, "Conditions adsb.fi");
+  assert.equal(snapshot.meta.source.role, "primary");
+});
+
+test("the fallback identifies its own source and positions are replaced when the primary recovers", async () => {
+  let now = baseTime, primaryFails = true;
+  const requests = [];
+  const api = module();
+  const cache = new api.AircraftCache({ now: () => now, fetcher: async (url) => {
+    requests.push(url);
+    if (url.includes("adsb.fi")) return primaryFails ? new Response(null, { status: 503 })
+      : new Response(JSON.stringify(body([helicopter({ hex: "aaaaaa" })], now)));
+    return new Response(JSON.stringify(body([helicopter({ hex: "bbbbbb" })], now)));
+  } });
+  const fallback = await cache.getSnapshot();
+  assert.equal(fallback.meta.status, "ready");
+  assert.equal(fallback.meta.source.name, "adsb.lol");
+  assert.equal(fallback.meta.source.role, "fallback");
+  assert.equal(fallback.meta.source.licence.name, "ODbL 1.0");
+  assert.deepEqual(plain(fallback.aircraft.map((item) => item.id)), ["bbbbbb"]);
+  now += 60_000;
+  primaryFails = false;
+  const recovered = await cache.getSnapshot();
+  assert.equal(recovered.meta.source.name, "adsb.fi");
+  assert.equal(recovered.meta.source.role, "primary");
+  assert.deepEqual(plain(recovered.aircraft.map((item) => item.id)), ["aaaaaa"]);
+  assert.equal(requests.length, 3);
+});
+
+test("fallback requests honor its anonymous daily budget and independent primary backoff", async () => {
+  let now = baseTime;
+  const calls = { primary: 0, fallback: 0 };
+  const api = module();
+  const cache = new api.AircraftCache({ now: () => now, fetcher: async (url) => {
+    if (url.includes("adsb.fi")) { calls.primary++; return new Response(null, { status: 403 }); }
+    calls.fallback++;
+    return new Response(JSON.stringify(body([helicopter()], now)));
+  } });
+  for (let minute = 0; minute < 10; minute++) {
+    now = baseTime + minute * 60_000;
+    const snapshot = await cache.getSnapshot();
+    assert.equal(snapshot.meta.source.name, "adsb.lol");
+    // A quota wait never extends the age of the last genuine position.
+    if (minute % 3 === 2) assert.equal(snapshot.aircraft.length, 0);
+  }
+  assert.equal(calls.primary, 1);
+  assert.equal(calls.fallback, 4);
+  assert.equal(Date.parse(cache.snapshot().meta.nextUpdateAt), baseTime + 12 * 60_000);
+});
+
+test("a valid empty primary response does not trigger extra upstream requests", async () => {
+  const requests = [];
+  const api = module();
+  const cache = new api.AircraftCache({ now: () => baseTime, fetcher: async (url) => {
+    requests.push(url); return new Response(JSON.stringify(body([])));
+  } });
+  const snapshot = await cache.getSnapshot();
+  assert.equal(snapshot.aircraft.length, 0);
+  assert.equal(requests.length, 1);
+  assert.equal(snapshot.meta.source.name, "adsb.fi");
+});
+
+test("source-declared errors and old envelopes use the fallback rather than masquerading as successful empty coverage", async () => {
+  const api = module();
+  for (const payload of [{ ...body([]), msg: "Invalid request" }, body([], baseTime - 121_000)]) {
+    const cache = new api.AircraftCache({ now: () => baseTime, fetcher: async (url) => new Response(JSON.stringify(
+      url.includes("adsb.fi") ? payload : body([helicopter()])
+    )) });
+    const snapshot = await cache.getSnapshot();
+    assert.equal(snapshot.meta.source.name, "adsb.lol");
+    assert.equal(snapshot.meta.status, "ready");
+    assert.equal(snapshot.aircraft.length, 1);
+  }
 });
 
 test("Retry-After and access refusal backoff prevent repeated upstream requests", async () => {
@@ -134,7 +206,7 @@ test("Retry-After and access refusal backoff prevent repeated upstream requests"
     assert.equal(Date.parse(failed.meta.nextUpdateAt), baseTime + expectedSeconds * 1000);
     now += (expectedSeconds - 1) * 1000;
     await cache.getSnapshot();
-    assert.equal(requests, 1);
+    assert.equal(requests, 2);
   }
 });
 
@@ -160,20 +232,24 @@ test("upstream failure preserves dated data only until its true position age exp
 
 test("a hard timeout does not allow a late upstream result to resurrect the cache", async () => {
   const timers = new Map();
-  let nextTimer = 0, finish;
+  let nextTimer = 0;
+  const finishes = [];
   const api = module();
   const cache = new api.AircraftCache({ now: () => baseTime,
-    fetcher: () => new Promise((resolve) => { finish = resolve; }),
+    fetcher: () => new Promise((resolve) => { finishes.push(resolve); }),
     schedule: (callback, milliseconds) => { const id = ++nextTimer; timers.set(id, { callback, milliseconds }); return id; },
     cancel: (id) => timers.delete(id),
   });
   const pending = cache.getSnapshot();
   assert.equal(timers.size, 1);
   [...timers.values()][0].callback();
+  await new Promise(setImmediate);
+  assert.equal(finishes.length, 2);
+  [...timers.values()][0].callback();
   const failed = await pending;
   assert.equal(failed.meta.status, "unavailable");
   assert.match(failed.meta.error, /Délai/);
-  finish(new Response(JSON.stringify(body([helicopter()]))));
+  for (const finish of finishes) finish(new Response(JSON.stringify(body([helicopter()]))));
   await new Promise(setImmediate);
   assert.equal(cache.snapshot().aircraft.length, 0);
   assert.equal(cache.snapshot().meta.lastSuccessAt, null);
@@ -203,7 +279,7 @@ test("aircraft API exposes cache metadata, attribution and conditional 304 witho
   assert.equal(response.status, 200);
   const result = await response.json();
   assert.deepEqual(result.meta.zone, { lat: 43.6108, lon: 3.8767, radiusKm: 20 });
-  assert.match(result.meta.source.attribution, /adsb.lol/);
+  assert.match(result.meta.source.attribution, /adsb.fi/);
   const unchanged = await route.GET({ headers: new Headers({ "If-None-Match": response.headers.get("etag") }) });
   assert.equal(unchanged.status, 304);
   assert.equal(await unchanged.text(), "");

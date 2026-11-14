@@ -116,7 +116,7 @@ function addLayers(map: LibreMap) {
     rotor.fill(new Path2D("M15 6C11 6 11 17 15 18C19 17 19 6 15 6Z"));
     rotor.stroke(new Path2D("M4 12H26M15 18V26M11 25H19M9 6L21 20M7 19L23 5"));
     map.addImage("tam-helicopter", rotor.getImageData(0, 0, 60, 60), { pixelRatio: 2, sdf: true });
-    map.addLayer({ id: "tam-aircraft-icons", type: "symbol", source: "tam-aircraft", layout: { "icon-image": "tam-helicopter", "icon-rotate": ["get", "bearing"], "icon-rotation-alignment": "map", "icon-allow-overlap": true, "icon-ignore-placement": true }, paint: { "icon-color": "#147a8a", "icon-halo-color": "#fff", "icon-halo-width": 1.5 } });
+    map.addLayer({ id: "tam-aircraft-icons", type: "symbol", source: "tam-aircraft", layout: { "icon-image": "tam-helicopter", "icon-rotate": ["get", "bearing"], "icon-rotation-alignment": "map", "icon-allow-overlap": true, "icon-ignore-placement": true }, paint: { "icon-color": ["case", ["get", "fresh"], "#147a8a", "#89939d"], "icon-opacity": ["case", ["get", "fresh"], 1, 0.65], "icon-halo-color": "#fff", "icon-halo-width": 1.5 } });
     map.addLayer({ id: "tam-aircraft-hit", type: "circle", source: "tam-aircraft", paint: { "circle-radius": 22, "circle-opacity": 0 } });
   }
 }
@@ -309,7 +309,7 @@ export default function TransitMap(props: Props) {
   useEffect(() => {
     const map = mapRef.current;
     if (!ready || !map) return;
-    source(map, "tam-aircraft")?.setData({ type: "FeatureCollection", features: props.aircraft.map((item) => ({ type: "Feature", properties: { id: item.id, bearing: vehicleBearing(item.bearing) ?? 0 }, geometry: { type: "Point", coordinates: [item.lon, item.lat] } })) });
+    source(map, "tam-aircraft")?.setData({ type: "FeatureCollection", features: props.aircraft.map((item) => ({ type: "Feature", properties: { id: item.id, bearing: vehicleBearing(item.bearing) ?? 0, fresh: item.freshness === "fresh" }, geometry: { type: "Point", coordinates: [item.lon, item.lat] } })) });
   }, [ready, props.aircraft]);
 
   useEffect(() => {

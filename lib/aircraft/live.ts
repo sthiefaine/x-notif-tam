@@ -3,17 +3,23 @@ import type { AircraftSnapshot, LiveHelicopter } from "./types";
 
 export const AIRCRAFT_ZONE = Object.freeze({ lat: 43.6108, lon: 3.8767, radiusKm: 20 });
 // 11 nautical miles encompass the fixed 20 km area; normalization clips it exactly.
-export const AIRCRAFT_SOURCE_URL = "https://api.adsb.lol/v2/point/43.6108/3.8767/11";
+export const AIRCRAFT_SOURCE_URL = "https://opendata.adsb.fi/api/v3/lat/43.6108/lon/3.8767/dist/11";
 export const AIRCRAFT_POLL_SECONDS = 60;
 const FRESH_SECONDS = 60;
 const RETAIN_SECONDS = 120;
 const MAX_BODY_BYTES = 512 * 1024;
-const source = {
-  name: "adsb.lol",
-  url: "https://www.adsb.lol/docs/open-data/api",
-  attribution: "Données ADS-B : adsb.lol et ses contributeurs — ODbL 1.0",
-  licence: { name: "ODbL 1.0", url: "https://opendatacommons.org/licenses/odbl/1-0/" },
-};
+const sources = [
+  { endpoint: AIRCRAFT_SOURCE_URL, minimumIntervalMs: 60_000, role: "primary" as const,
+    name: "adsb.fi", url: "https://adsb.fi/", attribution: "Données ADS-B : adsb.fi et ses contributeurs",
+    licence: { name: "Conditions adsb.fi", url: "https://github.com/adsbfi/opendata" } },
+  // The anonymous adsb.lol allowance is 500 requests/day/IP. A three-minute
+  // minimum interval bounds this process to 480/day, including failed attempts.
+  { endpoint: "https://api.adsb.lol/v2/point/43.6108/3.8767/11", minimumIntervalMs: 180_000, role: "fallback" as const,
+    name: "adsb.lol", url: "https://www.adsb.lol/docs/open-data/api",
+    attribution: "Données ADS-B : adsb.lol et ses contributeurs — ODbL 1.0",
+    licence: { name: "ODbL 1.0", url: "https://opendatacommons.org/licenses/odbl/1-0/" } },
+];
+type AircraftSource = typeof sources[number];
 const coverageMessage = "Couverture partielle : certains hélicoptères ne sont pas reçus. Une liste vide ne prouve pas leur absence.";
 const asRecord = (value: unknown): Record<string, unknown> => value !== null && typeof value === "object" ? value as Record<string, unknown> : {};
 const finite = (value: unknown): value is number => typeof value === "number" && Number.isFinite(value);
@@ -41,7 +47,8 @@ interface NormalizedAircraft {
 /** Only explicit category A7 is eligible; callsigns/model names never imply a helicopter. */
 export function normalizeAircraft(payload: unknown, receivedAt: number): NormalizedAircraft {
   const body = asRecord(payload), timestamp = epochMilliseconds(body.now);
-  if (!Array.isArray(body.ac) || body.ac.length > 2000 || timestamp === null || timestamp > receivedAt + 30_000) {
+  if (!Array.isArray(body.ac) || body.ac.length > 2000 || timestamp === null || timestamp > receivedAt + 30_000
+    || (typeof body.msg === "string" && body.msg.trim().toLowerCase() !== "no error")) {
     throw new Error("Invalid aircraft source response");
   }
   const unique = new Map<string, LiveHelicopter>();
@@ -118,9 +125,10 @@ export class AircraftCache {
   private readonly schedule: typeof setTimeout;
   private readonly cancel: typeof clearTimeout;
   private data: NormalizedAircraft | undefined;
+  private dataSource: AircraftSource = sources[0];
+  private readonly sourceStates = sources.map((source) => ({ source, nextAttempt: 0, failures: 0 }));
   private lastSuccess: number | null = null;
   private nextUpdate = 0;
-  private failureCount = 0;
   private error: string | null = null;
   private inflight: Promise<void> | undefined;
   constructor(options: AircraftCacheOptions = {}) {
@@ -134,49 +142,67 @@ export class AircraftCache {
     this.inflight = this.fetchSnapshot().finally(() => { this.inflight = undefined; });
     return this.inflight;
   }
-  private async fetchSnapshot() {
+  private async fetchSource(source: AircraftSource): Promise<NormalizedAircraft> {
     const controller = new AbortController();
     let timer: ReturnType<typeof setTimeout> | undefined;
     try {
-      // The async operation only returns data. Its eventual completion cannot
-      // overwrite the cache after the deadline has won the race.
+      // Each source gets four seconds, keeping both attempts inside the API's
+      // overall 15-second deadline. A late response cannot overwrite the cache.
       const operation = (async () => {
-        const response = await this.fetcher(AIRCRAFT_SOURCE_URL, { cache: "no-store", signal: controller.signal,
+        const response = await this.fetcher(source.endpoint, { cache: "no-store", signal: controller.signal,
           headers: { Accept: "application/json" } });
         if (!response.ok) {
           const minimum = [401, 403].includes(response.status) ? 30 * 60_000 : response.status === 429 ? 300_000 : undefined;
           throw new AircraftSourceFailure(`Source aérienne HTTP ${response.status}`, retryAfter(response, this.now()) ?? minimum);
         }
-        return normalizeAircraft(await limitedJson(response), this.now());
+        const normalized = normalizeAircraft(await limitedJson(response), this.now());
+        if (this.now() - normalized.sourceTimestamp > RETAIN_SECONDS * 1000) throw new AircraftSourceFailure("Flux aérien ancien");
+        return normalized;
       })();
-      const normalized = await Promise.race([
+      return await Promise.race([
         operation,
         new Promise<never>((_, reject) => { timer = this.schedule(() => {
           controller.abort();
           reject(new AircraftSourceFailure("Délai de la source aérienne dépassé"));
-        }, 8_000); }),
+        }, 4_000); }),
       ]);
-      this.data = normalized;
-      this.lastSuccess = this.now();
-      this.nextUpdate = this.now() + AIRCRAFT_POLL_SECONDS * 1000;
-      this.failureCount = 0;
-      this.error = null;
-    } catch (failure) {
-      this.failureCount++;
-      const delay = failure instanceof AircraftSourceFailure && failure.retryMs
-        ? failure.retryMs : Math.min(15 * 60_000, 60_000 * 2 ** Math.min(this.failureCount - 1, 4));
-      this.nextUpdate = this.now() + delay;
-      this.error = failure instanceof AircraftSourceFailure ? failure.reason : "Source aérienne temporairement indisponible";
     } finally {
       if (timer) this.cancel(timer);
       controller.abort();
     }
   }
+  private async fetchSnapshot() {
+    const failures: string[] = [];
+    for (const state of this.sourceStates) {
+      if (this.now() < state.nextAttempt) continue;
+      // Reserve before requesting; successes, failures and timeouts all count.
+      state.nextAttempt = this.now() + state.source.minimumIntervalMs;
+      try {
+        const normalized = await this.fetchSource(state.source);
+        this.data = normalized;
+        this.dataSource = state.source;
+        this.lastSuccess = this.now();
+        state.failures = 0;
+        this.error = null;
+        this.nextUpdate = Math.max(this.now() + AIRCRAFT_POLL_SECONDS * 1000,
+          Math.min(...this.sourceStates.map((item) => item.nextAttempt)));
+        return;
+      } catch (failure) {
+        state.failures++;
+        const delay = failure instanceof AircraftSourceFailure && failure.retryMs
+          ? failure.retryMs : Math.min(15 * 60_000, 60_000 * 2 ** Math.min(state.failures - 1, 4));
+        state.nextAttempt = Math.max(state.nextAttempt, this.now() + delay);
+        failures.push(`${state.source.name} : ${failure instanceof AircraftSourceFailure ? failure.reason : "source temporairement indisponible"}`);
+      }
+    }
+    this.nextUpdate = Math.min(...this.sourceStates.map((item) => item.nextAttempt));
+    this.error = failures.join(" · ") || "Sources aériennes temporairement indisponibles";
+  }
   async getSnapshot(): Promise<AircraftSnapshot> {
     if (this.now() >= this.nextUpdate) {
       // Polling and position freshness both use a 60-second window. Serving the
       // old snapshot here would hide a healthy aircraft at every subsequent poll.
-      // The shared refresh is bounded by its 8-second deadline, including failures.
+      // Both sources together have a maximum eight-second deadline.
       await this.refresh();
     } else if (!this.data && this.inflight) await this.inflight;
     return this.snapshot();
@@ -195,7 +221,8 @@ export class AircraftCache {
         sourceTimestamp: this.data ? new Date(this.data.sourceTimestamp).toISOString() : null,
         nextUpdateAt: new Date(this.nextUpdate || now).toISOString(), pollIntervalSeconds: AIRCRAFT_POLL_SECONDS,
         coverage: "incomplete", coverageMessage, zone: { ...AIRCRAFT_ZONE },
-        source: { ...source, licence: { ...source.licence } }, error: this.error,
+        source: { name: this.dataSource.name, url: this.dataSource.url, attribution: this.dataSource.attribution,
+          licence: { ...this.dataSource.licence }, role: this.dataSource.role }, error: this.error,
       },
       aircraft, counts: { receivedAircraft: this.data?.receivedAircraft ?? 0, typedRotorcraft: this.data?.typedRotorcraft ?? 0,
         visibleHelicopters: aircraft.length, freshHelicopters: aircraft.filter((item) => item.freshness === "fresh").length },

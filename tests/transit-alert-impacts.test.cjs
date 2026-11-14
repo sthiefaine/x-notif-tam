@@ -62,6 +62,37 @@ test("November 14 bus 6/7 alert resolves abbreviated stops on each actual route 
   assert.equal(copies[0].sourceIds, undefined, "display grouping does not mutate the raw producer records");
 });
 
+test("November 14 evening multi-line notice resolves Blum and Gare Maguelone without closing replacement platforms", () => {
+  const directory = path.resolve(__dirname, "../data/transit");
+  const manifest = JSON.parse(fs.readFileSync(path.join(directory, "current.json")));
+  const network = JSON.parse(fs.readFileSync(path.join(directory, "versions", manifest.version, "network.json")));
+  const lookup = { trips: {}, patterns: Object.fromEntries(network.routePatterns.map((pattern) => [pattern.id, pattern])) };
+  const description = "Déviation lignes 1 et 2. Secteur Blum, Gare Maguelone, Comédie non desservis dans les 2 sens. La ligne 2 dessert le pôle Gare, à droite de la Gare SNCF, et Place de l'Europe";
+  const copies = ["1", "2"].map((routeId, index) => ({ ...normalized(description, {
+    effect: "UNKNOWN_EFFECT", informedEntity: [{ routeId }],
+    activePeriod: [{ start: Date.parse("2026-11-14T18:55:00Z") / 1000, end: Date.parse("2026-11-14T22:59:00Z") / 1000 }],
+  }, { network, lookup }), id: `evening-${index}` }));
+  for (const alert of copies) {
+    assert.equal(alert.category, "detour");
+    assert.equal(alert.interpretation.status, "stops_located");
+    assert.deepEqual(plain(alert.interpretation.unresolvedStops), []);
+    const names = new Set(alert.stopImpacts.map((impact) => network.stops.find((stop) => stop.id === impact.stopId).name));
+    assert.deepEqual(names, new Set(alert.routeIds[0] === "1" ? ["Léon Blum", "Gare Saint-Roch", "Comédie"] : ["Gare Saint-Roch", "Comédie"]));
+    assert.equal(alert.stopImpacts.length, alert.routeIds[0] === "1" ? 6 : 4);
+    assert.ok(alert.stopImpacts.every((impact) => impact.directionId === 0 || impact.directionId === 1));
+    assert.equal(alert.geometry, undefined, "a named closure list does not define the replacement route");
+    assert.ok(alert.stopImpacts.every((impact) => !network.stops.find((stop) => stop.id === impact.stopId).name.includes("République")));
+    assert.equal(alerts.isAlertActive(alert, Date.parse("2026-11-14T18:54:59Z")), false);
+    assert.equal(alerts.isAlertActive(alert, Date.parse("2026-11-14T18:55:00Z")), true);
+    assert.equal(alerts.isAlertActive(alert, Date.parse("2026-11-14T22:59:00Z")), false);
+  }
+  const grouped = display.groupDisplayAlerts(copies);
+  assert.equal(grouped.length, 1);
+  assert.deepEqual(plain(grouped[0].routeIds), ["1", "2"]);
+  assert.equal(grouped[0].interpretation.matchedStopNames.length, 3);
+  assert.ok(grouped[0].stopImpacts.filter((impact) => ["41141", "41215"].includes(impact.stopId)).every((impact) => !impact.routeIds.includes("2")));
+});
+
 test("a shared multi-selector sentence closes only its route-specific stops, unlike separate line clauses", () => {
   const data = fixture();
   data.network.stops.push({ id: "other", name: "Echo", lat: 43.62, lon: 3.8, routeIds: ["43"] });

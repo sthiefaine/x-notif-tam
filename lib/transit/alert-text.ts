@@ -70,6 +70,20 @@ export function bothDirections(text: string): boolean {
 }
 
 export type StopNameResolution = { status: "matched"; stops: TransitStop[]; abbreviated: boolean } | { status: "unknown" | "ambiguous"; stops: [] };
+const stopDistance = (a: Pick<TransitStop, "lat" | "lon">, b: Pick<TransitStop, "lat" | "lon">) => Math.hypot((a.lon - b.lon) * Math.cos((a.lat + b.lat) * Math.PI / 360), a.lat - b.lat) * 111195;
+
+/** Producer shorthand must resolve to a real named station, never an arbitrary "Gare". */
+function qualifiedStopAlias(key: string, candidates: readonly TransitStop[]): TransitStop[] | undefined {
+  if (key === "blum") return candidates.filter((stop) => normalizeStopLabel(stop.name) === "leon blum");
+  if (key !== "gare maguelone" && key !== "gare saint roch maguelone") return;
+  // SNCF identifies the L1/L2 platforms on rue de Maguelone, separately from
+  // the République platforms. Retain both the route and geographic guards.
+  // https://www.garesetconnexions.sncf/fr/gares-services/montpellier-saint-roch/intermodalites/tam
+  return candidates.filter((stop) => normalizeStopLabel(stop.name) === "gare saint roch"
+    && stop.routeIds.some((id) => id === "1" || id === "2")
+    && stopDistance(stop, { lat: 43.60575, lon: 3.8801 }) <= 100);
+}
+
 export function resolveStopLabel(label: string, candidates: readonly TransitStop[]): StopNameResolution {
   const key = normalizeStopLabel(label);
   const groups = new Map<string, TransitStop[]>();
@@ -79,7 +93,8 @@ export function resolveStopLabel(label: string, candidates: readonly TransitStop
   }
   const exact = groups.has(key) ? [[key, groups.get(key)!] as const] : [];
   const tokens = key.split(" ");
-  const matches = exact.length ? exact : [...groups].filter(([name]) => {
+  const alias = exact.length ? undefined : qualifiedStopAlias(key, candidates);
+  const matches = exact.length ? exact : alias !== undefined ? alias.length ? [[normalizeStopLabel(alias[0].name), alias] as const] : [] : [...groups].filter(([name]) => {
     const words = name.split(" ");
     // Whole-word prefix (Peyrou), or one first-name initial (L. Blum).
     return key.length >= 4 && (name.startsWith(key + " ") || tokens.length === words.length && tokens.length >= 2
@@ -88,8 +103,7 @@ export function resolveStopLabel(label: string, candidates: readonly TransitStop
   if (!matches.length) return { status: "unknown", stops: [] };
   if (matches.length !== 1) return { status: "ambiguous", stops: [] };
   const stops = [...matches[0][1]];
-  const distance = (a: TransitStop, b: TransitStop) => Math.hypot((a.lon - b.lon) * Math.cos((a.lat + b.lat) * Math.PI / 360), a.lat - b.lat) * 111195;
-  if (stops.some((a) => !Number.isFinite(a.lat) || !Number.isFinite(a.lon) || stops.some((b) => distance(a, b) > 150))) return { status: "ambiguous", stops: [] };
+  if (stops.some((a) => !Number.isFinite(a.lat) || !Number.isFinite(a.lon) || stops.some((b) => stopDistance(a, b) > 150))) return { status: "ambiguous", stops: [] };
   return { status: "matched", stops, abbreviated: exact.length === 0 };
 }
 

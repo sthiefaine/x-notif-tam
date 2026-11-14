@@ -30,7 +30,7 @@ export interface AircraftSnapshot {
     coverage: "incomplete";
     coverageMessage: string;
     zone: { lat: number; lon: number; radiusKm: number };
-    source: { name: string; url: string; attribution: string; licence: { name: string; url: string } };
+    source: { name: string; url: string; attribution: string; licence: { name: string; url: string }; role?: "primary" | "fallback" };
     error: string | null;
   };
   aircraft: LiveHelicopter[];

@@ -50,6 +50,19 @@ test("abbreviations do not split station labels into unrelated sentences", () =>
   assert.deepEqual(plain(text.closureSubjects("Les stations St Eloi et L Blum non desservies")), [{ text: "st eloi et l blum", explicit: true }]);
 });
 
+test("producer station aliases retain Maguelone platform and geographic qualifiers", () => {
+  const stop = (id, name, routeIds = ["1", "2"], lat = 43.60575) => ({ id, name, lat, lon: 3.8801, routeIds });
+  const stops = [stop("mag0", "Gare Saint-Roch"), stop("mag1", "Gare Saint-Roch", ["1", "2"], 43.6058),
+    stop("rep", "Gare Saint-Roch - République", ["3", "4"]), stop("sud", "Gare Sud de France"), stop("blum", "Léon Blum", ["1"])];
+  assert.deepEqual(plain(text.resolveStopLabel("Gare Maguelone", stops).stops.map((s) => s.id)), ["mag0", "mag1"]);
+  assert.equal(text.resolveStopLabel("Blum", stops).stops[0].id, "blum");
+  assert.equal(text.resolveStopLabel("Gare", stops).status, "ambiguous");
+  assert.equal(text.resolveStopLabel("Gare Maguelone République", stops).status, "unknown");
+  assert.equal(text.resolveStopLabel("Gare Maguelone", [stop("wrong-route", "Gare Saint-Roch", ["3"])]).status, "unknown");
+  assert.equal(text.resolveStopLabel("Gare Maguelone", [stop("far", "Gare Saint-Roch", ["1"], 43.62)]).status, "unknown");
+  assert.equal(text.resolveStopLabel("Blum", [...stops, stop("far-blum", "Léon Blum", ["1"], 43.62)]).status, "ambiguous");
+});
+
 test("explicit closed and removed stops are understood without treating their negations as closures", () => {
   for (const predicate of ["sont fermés", "seront supprimés", "supprimés", "fermés"]) {
     assert.deepEqual(plain(text.closureSubjects(`Les arrêts Alpha et Bravo ${predicate}`)), [{ text: "alpha et bravo", explicit: true }]);
