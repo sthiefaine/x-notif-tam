@@ -142,3 +142,14 @@ test("a located detour has its own span and labels, without inventing closed pla
   assert.ok(render(now + 60000).includes("detourTrack"));
   assert.ok(!render(now + 120000).includes("detourTrack"));
 });
+
+test("a stop-only detour displays the known closures without inventing a detour span", () => {
+  const alert = { id: "stops-only", category: "detour", routeIds: ["A"], stopIds: [], periods: [], description: "Ligne déviée - Alfa non desservi.",
+    stopImpacts: [{ stopId: "a", routeIds: ["A"], serviceStatus: "not_served", evidence: "explicit_text", directionId: 0 }] };
+  const html = renderToStaticMarkup(React.createElement(Diagram, { network, route, vehicles: [], alerts: [alert], now }));
+  assert.ok(html.includes("Déviation annoncée"));
+  assert.ok(html.includes("Arrêts non desservis repérés"));
+  assert.ok(html.includes("activeClosure"));
+  assert.ok(!html.includes("detourTrack"));
+  assert.ok(!html.includes("Informations non localisées sur la ligne"));
+});

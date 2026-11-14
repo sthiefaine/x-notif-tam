@@ -1,11 +1,12 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const { loadTypeScript } = require("./helpers/load-typescript.cjs");
+const textRules = loadTypeScript("lib/transit/alert-text.ts");
 const realtime = loadTypeScript("lib/transit/realtime.ts");
 const stopMatching = loadTypeScript("lib/transit/stop-matching.ts");
 const dwell = loadTypeScript("lib/transit/dwell.ts", { mocks: { "./realtime": realtime, "./stop-matching": stopMatching } });
-const impacts = loadTypeScript("lib/transit/alert-impacts.ts");
-const alerts = loadTypeScript("lib/transit/live-alerts.ts", { mocks: { "./realtime": realtime, "./dwell": dwell, "./alert-interruptions": loadTypeScript("lib/transit/alert-interruptions.ts"), "./alert-impacts": impacts } });
+const impacts = loadTypeScript("lib/transit/alert-impacts.ts", { mocks: { "./alert-text": textRules } });
+const alerts = loadTypeScript("lib/transit/live-alerts.ts", { mocks: { "./alert-text": textRules, "./realtime": realtime, "./dwell": dwell, "./alert-interruptions": loadTypeScript("lib/transit/alert-interruptions.ts", { mocks: { "./alert-text": textRules } }), "./alert-impacts": impacts } });
 const baseTime = Date.parse("2026-11-08T12:00:00Z");
 function fixtureNetwork() {
   const stops = ["A", "B", "C", "D"].map((id, index) => ({ id, name: id, lat: 43.6, lon: 3.8 + index * 0.002, routeIds: ["33"] }));
@@ -43,7 +44,7 @@ function harness(options = {}) {
   const { network, lookup } = fixtureNetwork();
   let now = baseTime;
   const feeds = { vehicles: feed(now, [vehicleEntity(now)]), tripUpdates: feed(now, [tripEntity(now)]), alerts: feed(now) };
-  const responses = {}, requests = [], persisted = [], timers = new Map();
+  const responses = {}, requests = [], persisted = [], interpretationWarnings = [], timers = new Map();
   let nextTimer = 0;
   const schedule = (callback, milliseconds) => { const id = ++nextTimer; timers.set(id, { callback, milliseconds }); return id; };
   const cancel = (id) => timers.delete(id);
@@ -59,7 +60,7 @@ function harness(options = {}) {
       "./network": { getTransitNetwork: async () => network, getTripLookup: async () => lookup },
       "./realtime": realtime, "./dwell": dwell, "./live-alerts": alerts,
     },
-    globals: { AbortController, fetch: fetcher, setTimeout: schedule, clearTimeout: cancel },
+    globals: { AbortController, fetch: fetcher, setTimeout: schedule, clearTimeout: cancel, console: { log() {}, error() {}, warn: (...args) => interpretationWarnings.push(args) } },
   });
   const collector = new module.LiveCollector({
     fetcher, network: async () => network, lookup: async () => lookup,
@@ -67,9 +68,35 @@ function harness(options = {}) {
     now: () => now, random: () => 0.5, schedule, cancel,
     persist: async (snapshot) => { persisted.push(snapshot); if (options.persistError) throw new Error("fake db failure"); },
   });
-  return { module, collector, feeds, responses, requests, persisted, timers, network, lookup,
+  return { module, collector, feeds, responses, requests, persisted, interpretationWarnings, timers, network, lookup,
     now: () => now, advance: (seconds) => { now += seconds * 1000; } };
 }
+
+test("unresolved alert interpretation logs only changes, then resets on resolution or differential deletion", async () => {
+  const h = harness();
+  const record = (name) => ({ id: "text-alert", alert: { informedEntity: [{ routeId: "33" }], descriptionText: { translation: [{ language: "fr", text: `L'arrêt ${name} n'est pas desservi.` }] } } });
+  h.feeds.alerts = feed(h.now(), [record("Introuvable")]);
+  assert.equal(await h.collector.pollSource("alerts"), true);
+  await h.collector.pollSource("alerts");
+  assert.equal(h.interpretationWarnings.length, 1, "the repeated 30-second feed does not spam logs");
+  assert.equal(h.interpretationWarnings[0][0], "[transit.alert_interpretation]");
+  assert.equal(JSON.parse(h.interpretationWarnings[0][1]).unresolvedStops[0].reason, "unknown_stop");
+  h.feeds.alerts = feed(h.now(), [record("Autre inconnu")]);
+  await h.collector.pollSource("alerts");
+  assert.equal(h.interpretationWarnings.length, 2);
+  h.feeds.alerts = feed(h.now(), [record("A")]);
+  await h.collector.pollSource("alerts");
+  assert.equal(h.collector.getSnapshot().alerts[0].interpretation.status, "stops_located");
+  h.feeds.alerts = feed(h.now(), [record("Introuvable")]);
+  await h.collector.pollSource("alerts");
+  assert.equal(h.interpretationWarnings.length, 3);
+  h.feeds.alerts = feed(h.now(), [{ id: "text-alert", isDeleted: true }], "DIFFERENTIAL");
+  await h.collector.pollSource("alerts");
+  h.feeds.alerts = feed(h.now(), [record("Introuvable")], "DIFFERENTIAL");
+  await h.collector.pollSource("alerts");
+  assert.equal(h.interpretationWarnings.length, 4);
+  h.collector.stop();
+});
 
 test("independent feed collection warms without X and a persistence failure cannot clear live data", async () => {
   const h = harness({ persistError: true });
@@ -327,7 +354,7 @@ test("unchanged HTTP 304 does not refresh entity time or persisted success time"
   h.collector.stop();
 });
 
-test("line 33 works without affected stops are text-only and text alone never implies official NO_SERVICE", () => {
+test("an unbounded textual interruption is estimated and never closes the whole route", () => {
   const { network, lookup } = fixtureNetwork();
   const result = alerts.normalizeAlerts(feed(baseTime, [{ id: "works33", alert: {
     headerText: { translation: [{ text: "Ligne 33 — travaux" }] },
@@ -335,9 +362,12 @@ test("line 33 works without affected stops are text-only and text alone never im
   } }]), network, lookup)[0];
   assert.equal(result.scope, "line");
   assert.equal(result.geometry, undefined);
-  assert.equal(result.category, "works");
+  assert.equal(result.category, "no_service");
   assert.equal(result.confidence, "estimated");
   assert.equal(result.classificationSource, "keywords");
+  assert.equal(result.effect, "UNKNOWN_EFFECT");
+  assert.equal(result.interpretation.status, "unresolved");
+  assert.equal(loadTypeScript("app/components/transit-state.ts").affectedLineFeatures(network, [result], baseTime).length, 0);
   const explicit = alerts.normalizeAlerts(feed(baseTime, [{ id: "official", alert: { effect: "NO_SERVICE", informedEntity: [{ routeId: "33" }] } }]), network, lookup)[0];
   assert.equal(explicit.category, "no_service");
   assert.equal(explicit.effect, "NO_SERVICE");

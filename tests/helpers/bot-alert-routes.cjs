@@ -1,8 +1,9 @@
 const { loadTypeScript } = require("./load-typescript.cjs");
+const textRules = loadTypeScript("lib/transit/alert-text.ts");
 const realtime = loadTypeScript("lib/transit/realtime.ts");
 const stopMatching = loadTypeScript("lib/transit/stop-matching.ts");
 const dwell = loadTypeScript("lib/transit/dwell.ts", { mocks: { "./realtime": realtime, "./stop-matching": stopMatching } });
-const liveAlerts = loadTypeScript("lib/transit/live-alerts.ts", { mocks: { "./realtime": realtime, "./dwell": dwell, "./alert-interruptions": loadTypeScript("lib/transit/alert-interruptions.ts"), "./alert-impacts": loadTypeScript("lib/transit/alert-impacts.ts") } });
+const liveAlerts = loadTypeScript("lib/transit/live-alerts.ts", { mocks: { "./alert-text": textRules, "./realtime": realtime, "./dwell": dwell, "./alert-interruptions": loadTypeScript("lib/transit/alert-interruptions.ts", { mocks: { "./alert-text": textRules } }), "./alert-impacts": loadTypeScript("lib/transit/alert-impacts.ts", { mocks: { "./alert-text": textRules } }) } });
 function loadBotAlertRoutes({ routeIds = ["1", "2", "3", "4", "5", "12", "33", "A", "Amigo"], unavailable = false } = {}) {
   return loadTypeScript("app/api/post_tweets/alertRoutes.ts", {
     mocks: {

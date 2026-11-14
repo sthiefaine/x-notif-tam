@@ -1,6 +1,7 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const { loadTypeScript } = require("./helpers/load-typescript.cjs");
+const textRules = loadTypeScript("lib/transit/alert-text.ts");
 const realtime = loadTypeScript("lib/transit/realtime.ts");
 const time = loadTypeScript("lib/transit/time.ts");
 const stopMatching = loadTypeScript("lib/transit/stop-matching.ts");
@@ -211,8 +212,8 @@ test("coverage is source availability, never an invented network service percent
 
 test("live collector sends headway evidence only from VP, including stale/error collection boundaries", async () => {
   const { network, lookup } = fixture(), batches = [];
-  const impacts = loadTypeScript("lib/transit/alert-impacts.ts");
-  const alerts = loadTypeScript("lib/transit/live-alerts.ts", { mocks: { "./realtime": realtime, "./dwell": dwell, "./alert-interruptions": loadTypeScript("lib/transit/alert-interruptions.ts"), "./alert-impacts": impacts } });
+  const impacts = loadTypeScript("lib/transit/alert-impacts.ts", { mocks: { "./alert-text": textRules } });
+  const alerts = loadTypeScript("lib/transit/live-alerts.ts", { mocks: { "./alert-text": textRules, "./realtime": realtime, "./dwell": dwell, "./alert-interruptions": loadTypeScript("lib/transit/alert-interruptions.ts", { mocks: { "./alert-text": textRules } }), "./alert-impacts": impacts } });
   const live = loadTypeScript("lib/transit/live.ts", { globals: { AbortController }, mocks: {
     protobufjs: {}, "./network": {}, "./realtime": realtime, "./dwell": dwell, "./live-alerts": alerts,
   } });

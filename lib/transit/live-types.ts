@@ -106,6 +106,8 @@ export type AlertRouteSection = {
 export type AlertInterruption = AlertRouteSection;
 export interface LiveAlert {
   id: string;
+  /** Producer identities retained when equivalent announcements are grouped for display. */
+  sourceIds?: string[];
   routeIds: string[];
   /** Original producer selectors, retained when a commercial route is resolved. */
   rawRouteIds?: string[];
@@ -131,6 +133,14 @@ export interface LiveAlert {
   interruption?: AlertInterruption;
   /** Affected portion of the usual route, never an invented replacement itinerary. */
   detour?: AlertRouteSection;
+  /** Rule diagnostics: public source names only, without inferred GPS or time bounds. */
+  interpretation?: {
+    version: 2;
+    status: "located" | "stops_located" | "partial" | "unresolved" | "informational";
+    matchedStopNames: string[];
+    unresolvedStops: { name: string; routeId: string; reason: "unknown_stop" | "ambiguous_stop" | "ambiguous_direction" | "ambiguous_range" }[];
+    reasons: ("unknown_route" | "unresolved_stops" | "segment_unresolved" | "geometry_unavailable" | "replacement_route_unavailable")[];
+  };
   /** A route_reference is a display reference, never the incident's location. */
   mapAnchors?: {
     kind: "affected_stop" | "route_reference" | "segment_boundary";

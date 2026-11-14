@@ -3,8 +3,9 @@ import type { LiveAlert } from "./live-types";
 import type { RealtimeFeed } from "./realtime";
 import { unixMilliseconds } from "./realtime";
 import { distanceMetres } from "./dwell";
-import { alertTiming, deriveStopImpacts } from "./alert-impacts";
+import { alertTiming, analyzeStopImpacts } from "./alert-impacts";
 import { deriveDetour, deriveInterruption } from "./alert-interruptions";
+import { affirmativeServiceWording, scopedAlertClauses } from "./alert-text";
 export { alertTiming, stopImpactForRoute, stopServiceImpacts } from "./alert-impacts";
 
 const causes: Record<number, string> = { 1: "UNKNOWN_CAUSE", 2: "OTHER_CAUSE", 3: "TECHNICAL_PROBLEM", 4: "STRIKE", 5: "DEMONSTRATION", 6: "ACCIDENT", 7: "HOLIDAY", 8: "WEATHER", 9: "MAINTENANCE", 10: "CONSTRUCTION", 11: "POLICE_ACTIVITY", 12: "MEDICAL_EMERGENCY" };
@@ -115,7 +116,11 @@ export function normalizeAlerts(feed: RealtimeFeed, network: TransitNetwork, loo
     const keywordWorks = !producerWorks && /\btravaux\b|chantier|construction|roadworks/i.test(`${header} ${description}`);
     const selectors = (raw.informedEntity ?? []).map((selector) => ({ ...selector,
       ...(selector.routeId && rawRouteIds.length === 1 ? { routeId: routeIds[0] } : {}) }));
-    const interpretationKey = JSON.stringify([selectors, routeIds, description, header]);
+    const interpretationKey = JSON.stringify([selectors, routeIds, description, header, effect]);
+    const prose = `${description}\n${header}`;
+    const scoped = routeIds.filter((id) => knownRouteIds.has(id)).flatMap((id) => scopedAlertClauses(prose, id, routeIds.length > 1));
+    const textDetour = scoped.some((clause) => affirmativeServiceWording(clause, "detour"));
+    const textInterruption = scoped.some((clause) => affirmativeServiceWording(clause, "interruption"));
     if (!interpretations.has(interpretationKey)) interpretations.set(interpretationKey, deriveInterruption(selectors, routeIds, `${description}\n${header}`, network, lookup));
     const interpreted = interpretations.get(interpretationKey);
     if (!detours.has(interpretationKey)) detours.set(interpretationKey, !interpreted && effect !== "NO_SERVICE" ? deriveDetour(selectors, routeIds, `${description}\n${header}`, network, lookup) : undefined);
@@ -128,16 +133,33 @@ export function normalizeAlerts(feed: RealtimeFeed, network: TransitNetwork, loo
     const timingUncertain = (raw.activePeriod ?? []).length > 100 || (raw.activePeriod ?? []).some((period) =>
       (period.start !== undefined && unixMilliseconds(period.start) === null) || (period.end !== undefined && unixMilliseconds(period.end) === null)
       || (period.start !== undefined && period.end !== undefined && Number(period.start) >= Number(period.end)));
-    const stopImpacts = deriveStopImpacts(selectors, routeIds, effect, `${header}\n${description}`, network, lookup);
+    const section = interpreted?.interruption || detoured?.detour;
+    const sectionStops = section?.extent === "segment" && section.paths.length ? new Set(section.paths.flatMap((path) => path.stopIds)) : undefined;
+    const stopAnalysis = analyzeStopImpacts(selectors, routeIds, effect, prose, network, lookup, sectionStops);
+    const stopImpacts = stopAnalysis.impacts;
+    const category: LiveAlert["category"] = interpreted || effect === "NO_SERVICE" || textInterruption ? "no_service" : detoured || textDetour || effect === "DETOUR" ? "detour" : producerWorks || keywordWorks ? "works" : "other";
+    const matchedStopNames = [...new Set(stopImpacts.filter((impact) => impact.serviceStatus === "not_served").map((impact) => network.stops.find((stop) => stop.id === impact.stopId)?.name).filter((name): name is string => Boolean(name)))];
+    const reasons: NonNullable<LiveAlert["interpretation"]>["reasons"] = [];
+    if (routeIds.some((id) => !knownRouteIds.has(id))) reasons.push("unknown_route");
+    if (stopAnalysis.unresolved.length) reasons.push("unresolved_stops");
+    if (section?.extent === "segment" && !section.paths.length) reasons.push("segment_unresolved");
+    else if (section?.extent === "segment" && !geometry) reasons.push("geometry_unavailable");
+    if (textInterruption && !section && !geometry) reasons.push("segment_unresolved");
+    if (category === "detour") reasons.push("replacement_route_unavailable");
+    const located = Boolean(geometry || section?.extent === "line");
+    const unresolved = reasons.some((reason) => reason !== "replacement_route_unavailable");
+    const status: NonNullable<LiveAlert["interpretation"]>["status"] = unresolved ? located || matchedStopNames.length ? "partial" : "unresolved"
+      : located ? "located" : matchedStopNames.length ? "stops_located" : category === "detour" || category === "no_service" ? "unresolved" : "informational";
     alerts.push({ id: entity.id, routeIds, rawRouteIds, routeAssociation, stopIds, header, description,
       periods, ...(timingUncertain ? { timingUncertain } : {}), stopImpacts,
       cause, effect,
       scope: interpreted?.interruption.extent === "segment" || detoured?.detour.extent === "segment" || geometry ? "segment" : stopIds.length ? "stops" : routeIds.length ? "line" : "network",
-      confidence: interpreted || detoured || keywordWorks || geometry ? "estimated" : "official",
-      category: interpreted || effect === "NO_SERVICE" ? "no_service" : detoured || effect === "DETOUR" ? "detour" : producerWorks || keywordWorks ? "works" : "other",
-      classificationSource: interpreted || detoured || keywordWorks && effect !== "NO_SERVICE" ? "keywords" : "producer",
+      confidence: interpreted || detoured || textDetour || textInterruption || keywordWorks || geometry || stopImpacts.some((impact) => impact.evidence !== "structured") ? "estimated" : "official",
+      category,
+      classificationSource: interpreted || detoured || textDetour || textInterruption || keywordWorks && effect !== "NO_SERVICE" ? "keywords" : "producer",
       geometry, ...(interpreted ? { interruption: interpreted.interruption } : {}), ...(detoured ? { detour: detoured.detour } : {}),
-      mapAnchors: interpreted?.anchors ?? detoured?.anchors ?? mapAnchors(routeIds, stopIds, network, lookup),
+      interpretation: { version: 2, status, matchedStopNames, unresolvedStops: stopAnalysis.unresolved, reasons },
+      mapAnchors: interpreted?.anchors ?? detoured?.anchors ?? (matchedStopNames.length && !stopIds.length ? [] : mapAnchors(routeIds, stopIds, network, lookup)),
     });
   }
   return alerts;

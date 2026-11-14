@@ -3,15 +3,17 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
 const { loadTypeScript } = require("./helpers/load-typescript.cjs");
-// No runtime imports are allowed: this module is also used directly by the UI.
-const impacts = loadTypeScript("lib/transit/alert-impacts.ts");
+const textRules = loadTypeScript("lib/transit/alert-text.ts");
+// Text rules are pure and shared with the browser; no IO dependencies are loaded.
+const impacts = loadTypeScript("lib/transit/alert-impacts.ts", { mocks: { "./alert-text": textRules } });
 const realtime = loadTypeScript("lib/transit/realtime.ts");
 const stopMatching = loadTypeScript("lib/transit/stop-matching.ts");
 const dwell = loadTypeScript("lib/transit/dwell.ts", { mocks: { "./realtime": realtime, "./stop-matching": stopMatching } });
-const alerts = loadTypeScript("lib/transit/live-alerts.ts", { mocks: { "./realtime": realtime, "./dwell": dwell, "./alert-interruptions": loadTypeScript("lib/transit/alert-interruptions.ts"), "./alert-impacts": impacts } });
+const alerts = loadTypeScript("lib/transit/live-alerts.ts", { mocks: { "./alert-text": textRules, "./realtime": realtime, "./dwell": dwell, "./alert-interruptions": loadTypeScript("lib/transit/alert-interruptions.ts", { mocks: { "./alert-text": textRules } }), "./alert-impacts": impacts } });
 const now = Date.parse("2026-11-08T16:15:27Z");
 const plain = (value) => JSON.parse(JSON.stringify(value));
 const iso = (value) => new Date(value).toISOString();
+const display = loadTypeScript("lib/transit/alert-display.ts");
 function fixture() {
   const stops = ["Alpha", "Bravo", "Charlie", "Delta"].map((name, index) => ({
     id: String(index + 1), name, lat: 43.6, lon: 3.8 + index / 100, routeIds: index === 1 ? ["33", "43"] : ["33"],
@@ -26,6 +28,97 @@ function normalized(description, raw = {}, data = fixture()) {
     informedEntity: [{ routeId: "33" }], descriptionText: { translation: [{ language: "fr", text: description }] }, ...raw,
   } }] }, data.network, data.lookup)[0];
 }
+
+test("November 14 bus 6/7 alert resolves abbreviated stops on each actual route and both GTFS directions", () => {
+  const directory = path.resolve(__dirname, "../data/transit");
+  const manifest = JSON.parse(fs.readFileSync(path.join(directory, "current.json")));
+  const network = JSON.parse(fs.readFileSync(path.join(directory, "versions", manifest.version, "network.json")));
+  const lookup = { trips: {}, patterns: Object.fromEntries(network.routePatterns.map((pattern) => [pattern.id, pattern])) };
+  const description = "Manifestation : lignes 6 et 7 déviées dans les deux sen - Peyrou et Albert 1er non desservis.";
+  const copies = ["6", "7", "6", "7"].map((routeId, index) => ({ ...normalized(description, {
+    effect: "UNKNOWN_EFFECT", informedEntity: [{ routeId }], activePeriod: [{ start: now / 1000 + 600, end: now / 1000 + 1200 }],
+  }, { network, lookup }), id: `copy-${index}` }));
+  for (const alert of copies) {
+    assert.equal(alert.category, "detour");
+    assert.equal(alert.interpretation.status, "stops_located");
+    assert.deepEqual(plain(alert.interpretation.unresolvedStops), []);
+    assert.equal(alert.geometry, undefined, "a closure list is not a detour itinerary");
+    assert.equal(alerts.isAlertActive(alert, now), false);
+    assert.equal(alerts.isAlertActive(alert, now + 600000), true);
+    assert.equal(alerts.isAlertActive(alert, now + 1200000), false);
+    const ids = alert.stopImpacts.map((impact) => impact.stopId).sort();
+    assert.deepEqual(plain(ids), alert.routeIds[0] === "6" ? ["2220", "6133", "6236", "6237"] : ["6133", "6237"]);
+    assert.ok(alert.stopImpacts.every((impact) => impact.directionId === 0 || impact.directionId === 1));
+  }
+  const grouped = display.groupDisplayAlerts(copies);
+  assert.equal(grouped.length, 1);
+  assert.deepEqual(plain(grouped[0].routeIds), ["6", "7"]);
+  assert.equal(grouped[0].sourceIds.length, 4);
+  assert.equal(grouped[0].interpretation.matchedStopNames.length, 2);
+  assert.ok(grouped[0].stopImpacts.filter((impact) => ["2220", "6236"].includes(impact.stopId)).every((impact) => !impact.routeIds.includes("7")));
+  assert.equal(impacts.selectMapAlerts(grouped, now).alerts.length, 0);
+  assert.equal(impacts.selectMapAlerts(grouped, now, grouped[0].id).alerts.length, 1);
+  assert.equal(display.groupDisplayAlerts([copies[0], { ...copies[1], periods: [] }]).length, 2);
+  assert.equal(copies[0].sourceIds, undefined, "display grouping does not mutate the raw producer records");
+});
+
+test("a shared multi-selector sentence closes only its route-specific stops, unlike separate line clauses", () => {
+  const data = fixture();
+  data.network.stops.push({ id: "other", name: "Echo", lat: 43.62, lon: 3.8, routeIds: ["43"] });
+  data.lookup.patterns.other = { id: "other", routeId: "43", directionId: 0, stopIds: ["other"], stopSequences: [1] };
+  const raw = { informedEntity: [{ routeId: "33" }, { routeId: "43" }] };
+  const shared = normalized("Lignes 33 et 43 déviées - Bravo et Echo non desservis.", raw, data);
+  assert.equal(shared.category, "detour");
+  assert.deepEqual(plain(shared.stopImpacts.map((impact) => [impact.stopId, impact.routeIds])), [["2", ["33"]], ["2", ["43"]], ["other", ["43"]]]);
+  const separate = normalized("Ligne 33 déviée. Arrêt Alpha non desservi. Ligne 43 déviée. Arrêt Echo non desservi.", raw, data);
+  assert.deepEqual(plain(separate.stopImpacts.map((impact) => [impact.stopId, impact.routeIds])), [["1", ["33"]], ["other", ["43"]]]);
+});
+
+test("uncertain names remain visible in diagnostics without closing ambiguous platforms", () => {
+  const alert = normalized("Les arrêts Bravo et Arrêt Inconnu ne sont pas desservis.");
+  assert.deepEqual(plain(alert.stopImpacts.map((impact) => impact.stopId)), ["2"]);
+  assert.equal(alert.interpretation.status, "partial");
+  assert.ok(alert.interpretation.unresolvedStops.some((stop) => stop.reason === "unknown_stop"));
+  assert.equal(alert.geometry, undefined);
+});
+
+test("commercial lettered routes retain their case when resolving a shared list", () => {
+  const data = fixture();
+  data.network.routes.push({ id: "A", shortName: "A", type: 3 });
+  data.network.stops.push({ id: "letter", name: "Echo", lat: 43.62, lon: 3.8, routeIds: ["A"] });
+  const alert = normalized("Lignes 33 et A déviées - Alpha et Echo non desservis.", {}, data);
+  assert.equal(alert.category, "detour");
+  assert.deepEqual(plain(alert.stopImpacts.map((impact) => impact.stopId)), ["1"]);
+  assert.deepEqual(plain(alert.interpretation.unresolvedStops), []);
+});
+
+test("a narrower direction statement does not inherit an earlier both-directions closure", () => {
+  const data = fixture();
+  data.network.stops.push({ ...data.network.stops[1], id: "reverse", name: "Bravo" });
+  data.lookup.patterns.reverse = { id: "reverse", routeId: "33", directionId: 1, stopIds: ["reverse"], stopSequences: [1] };
+  const alert = normalized("Ligne 33 déviée dans les deux sens. Vers Centre : arrêt Bravo non desservi.", {}, data);
+  assert.deepEqual(plain(alert.stopImpacts), []);
+  assert.ok(alert.interpretation.unresolvedStops.some((stop) => stop.reason === "ambiguous_direction"));
+});
+
+test("a verified route section disambiguates Gare inside a mixed list and range, without closing Gare Sud de France", () => {
+  const directory = path.resolve(__dirname, "../data/transit");
+  const manifest = JSON.parse(fs.readFileSync(path.join(directory, "current.json")));
+  const network = JSON.parse(fs.readFileSync(path.join(directory, "versions", manifest.version, "network.json")));
+  const lookup = { trips: {}, patterns: Object.fromEntries(network.routePatterns.map((pattern) => [pattern.id, pattern])) };
+  const message = "La ligne une est déviée dans les 2 sens, entre Corum et Pl Europe. Secteur Comédie, Gare à L. Blum non desservi.";
+  const raw = { informedEntity: [{ routeId: "1" }] };
+  const alert = normalized(message, raw, { network, lookup });
+  assert.equal(alert.category, "detour");
+  assert.equal(alert.interpretation.status, "located");
+  assert.deepEqual(plain(alert.interpretation.unresolvedStops), []);
+  const names = new Set(alert.stopImpacts.map((impact) => network.stops.find((stop) => stop.id === impact.stopId).name));
+  assert.deepEqual(names, new Set(["Comédie", "Gare Saint-Roch", "Du Guesclin", "Antigone", "Léon Blum"]));
+  assert.equal(names.has("Gare Sud de France"), false);
+  const unbounded = normalized("Ligne une déviée dans les 2 sens. Secteur Comédie, Gare à L. Blum non desservi.", raw, { network, lookup });
+  assert.ok(unbounded.interpretation.unresolvedStops.some((stop) => stop.reason === "ambiguous_range"));
+  assert.ok(unbounded.stopImpacts.every((impact) => network.stops.find((stop) => stop.id === impact.stopId).name === "Comédie"));
+});
 
 test("observed upcoming TaM alert 1052678 resolves only the six unambiguous line 33 platforms", () => {
   const directory = path.resolve(__dirname, "../data/transit");
@@ -42,7 +135,8 @@ test("observed upcoming TaM alert 1052678 resolves only the six unambiguous line
   assert.deepEqual(plain(alert.stopIds), []);
   assert.equal(alert.geometry, undefined);
   assert.equal(alert.scope, "line");
-  assert.equal(alert.mapAnchors[0].kind, "route_reference");
+  assert.deepEqual(plain(alert.mapAnchors), [], "located closure symbols replace the unrelated generic route marker");
+  assert.equal(alert.interpretation.status, "stops_located");
   assert.equal(alert.stopImpacts.some((impact) => ["33203", "32117", "32217"].includes(impact.stopId)), false);
   const timed = impacts.stopImpactForRoute(alert, "33103", "33", now, 0);
   assert.equal(timed.temporalStatus, "upcoming");

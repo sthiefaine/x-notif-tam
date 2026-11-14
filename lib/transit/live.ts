@@ -85,6 +85,7 @@ export class LiveCollector {
   private vehicles = new Map<string, VehicleRecord>();
   private arrivals = new Map<string, ArrivalRecord>();
   private alerts = new Map<string, LiveAlert>();
+  private interpretationWarnings = new Map<string, string>();
   private dwell = new DwellDetector();
   private network: TransitNetwork | undefined;
   private lookup: TransitTripLookup | undefined;
@@ -222,6 +223,17 @@ export class LiveCollector {
         this.arrivals = next;
       } else {
         const normalized = normalizeAlerts(feed, this.network!, this.lookup!);
+        const normalizedIds = new Set(normalized.map((alert) => alert.id));
+        for (const id of this.interpretationWarnings.keys()) if (deleted.has(id) || full && !normalizedIds.has(id)) this.interpretationWarnings.delete(id);
+        for (const alert of normalized) {
+          const report = alert.interpretation;
+          const needsReview = report && (report.status === "partial" || report.status === "unresolved") && report.reasons.some((reason) => reason !== "replacement_route_unavailable");
+          if (!needsReview) { this.interpretationWarnings.delete(alert.id); continue; }
+          const signature = JSON.stringify([alert.routeIds, report]);
+          if (this.interpretationWarnings.get(alert.id) !== signature) console.warn("[transit.alert_interpretation]", JSON.stringify({ id: alert.id, routeIds: alert.routeIds, ...report }));
+          this.interpretationWarnings.set(alert.id, signature);
+        }
+        while (this.interpretationWarnings.size > 1000) this.interpretationWarnings.delete(this.interpretationWarnings.keys().next().value!);
         const next = full ? new Map<string, LiveAlert>() : new Map(this.alerts);
         for (const id of deleted) next.delete(id);
         for (const alert of normalized) next.set(alert.id, alert);

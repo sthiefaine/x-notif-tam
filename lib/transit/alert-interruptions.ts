@@ -1,21 +1,20 @@
 import type { AlertInterruption, LiveAlert } from "./live-types";
 import type { TransitNetwork, TransitTripLookup, TransitStop } from "./types";
+import { affirmativeServiceWording, foldAlertText, normalizeStopLabel, resolveStopLabel, scopedAlertClauses } from "./alert-text";
 
 type Selector = { routeId?: string; stopId?: string; directionId?: number; trip?: unknown; routeType?: number; agencyId?: string };
 type Coordinate = [number, number];
-const fold = (text: string) => text.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
-// Titles and common abbreviations only: never drop a distinguishing name such as République.
-const stationName = (text: string) => fold(text).split(" ").map((word) => word === "st" ? "saint" : word === "ste" ? "sainte" : word === "dr" ? "docteur" : word === "pl" ? "place" : word)
-  .filter((word) => word !== "docteur" && !/^(?:18|19|20)\d{2}$/.test(word)).join(" ")
-  .replace(/^place (?:de |du |des )?(?:(?:l|la|le) )?/, "place ");
-const lineNumbers: Record<string, string> = { un: "1", une: "1", deux: "2", trois: "3", quatre: "4", cinq: "5", six: "6", sept: "7", huit: "8", neuf: "9", dix: "10" };
+const fold = foldAlertText;
+const stationName = normalizeStopLabel;
 const metres = (a: Coordinate, b: Coordinate) => Math.hypot((a[0] - b[0]) * Math.cos((a[1] + b[1]) * Math.PI / 360), a[1] - b[1]) * 111195;
 const pointValid = (p: Coordinate) => p.length === 2 && p.every(Number.isFinite) && Math.abs(p[0]) <= 180 && Math.abs(p[1]) <= 90;
 type StationReference = NonNullable<Extract<AlertInterruption, { extent: "segment" }>["stationReferences"]>[number];
 
 function matchStationName(label: string, routeStops: TransitStop[], network: TransitNetwork, routeId: string): { keys: string[]; references?: StationReference[] } | undefined {
   const key = stationName(label);
-  if (routeStops.some((stop) => stationName(stop.name) === key)) return { keys: [key] };
+  const direct = resolveStopLabel(label, routeStops);
+  if (direct.status === "matched") return { keys: [...new Set(direct.stops.map((stop) => stationName(stop.name)))] };
+  if (direct.status === "ambiguous") return;
   // A qualifier must first match a real named station. Unknown words are never
   // stripped. Different quays in the same compact pole can then reference the
   // line's own station, without changing the producer's name or closing a quay.
@@ -56,13 +55,6 @@ function matchStationName(label: string, routeStops: TransitStop[], network: Tra
   return candidates.length === 1 ? candidates[0] : undefined;
 }
 
-function affirmative(sentence: string, kind: "interruption" | "detour") {
-  const value = fold(sentence);
-  if (/\b(?:si|risques?|possibles?|possibilites?|probables?|pourrait|pourraient|serait|seraient|susceptibles?|eventuels?|eventuelles?|reprise|retablie|retabli|annulee|annulees)\b|\ben cas\b/.test(value)
-    || /\b(?:pas|plus|jamais)(?: encore)? (?:interromp|devi)|\b(?:sans|aucune|fin de la|fin de l|fin d|pas d|absence d|absence de l) (?:interruption|deviation)|\b(?:interruption|deviation) (?:terminee|levee|non confirmee)\b/.test(value)) return false;
-  if (kind === "detour") return /\bligne [a-z0-9_-]+(?: (?:est|sera|temporairement|actuellement|reste|restera|a ete))* deviee\b|\bdeviation (?:de la|sur la) ligne [a-z0-9_-]+\b/.test(value);
-  return /\b(?:ligne [a-z0-9_-]+|circulation|trafic|service(?: commercial)?)(?: (?:est|sera|sont|seront|temporairement|totalement|integralement|actuellement|reste|restera|provisoirement|a ete))* (?:interrompu|suspendu)(?:e)?s?\b|\binterruption (?:du|de la|des) (?:service|trafic|circulation)|\b(?:ligne [a-z0-9_-]+|tramways?|bus) ne circul(?:e|ent|era|eront) (?:pas|plus)\b|\bpas de service\b/.test(value);
-}
 
 type Projection = { distance: number; position: number; along: number; point: Coordinate };
 function projections(point: Coordinate, coordinates: Coordinate[]): Projection[] {
@@ -167,14 +159,11 @@ function deriveRouteSection(selectors: readonly Selector[], routeIds: string[], 
   const only = directions.size === 1 ? [...directions][0] : undefined;
   const direction = only === 0 || only === 1 ? only : undefined;
   const stops = network.stops.filter((stop) => stop.routeIds.includes(routeId));
-  const sentences = description.slice(0, 8000).replace(/\b(st|ste|dr|pl)\.\s*/gi, "$1 ").split(/[.!?;\n]/).filter((sentence) => affirmative(sentence, kind));
+  const sentences = scopedAlertClauses(description, route.shortName || routeId).filter((sentence) => affirmativeServiceWording(sentence, kind));
   const results: { from: string; to: string; fromKeys?: string[]; toKeys?: string[]; references?: StationReference[] }[] = [];
   let wholeLine = false;
   for (const sentence of sentences) {
     const wording = fold(sentence);
-    if (/\blignes\b/.test(wording)) continue;
-    const mentions = [...wording.matchAll(/\bligne\s+([a-z0-9_-]+)/g)].map((match) => lineNumbers[match[1]] || match[1]).filter((id) => !["est", "sera", "reste", "restera"].includes(id));
-    if (mentions.some((id) => id !== fold(route.shortName || routeId) && id !== fold(routeId))) continue;
     const bounded = sentence.match(/\bentre\s+(.+)$/i);
     if (!bounded) {
       if (kind === "interruption" && !selectors.some((selector) => selector.stopId) && /\b(?:ensemble|totalite) de la ligne\b|\btoute la ligne\b|\bligne [a-z0-9_-]+ (?:(?:est |sera )?(?:totalement|integralement) interrompue|pas de service)\b/.test(wording)) {
