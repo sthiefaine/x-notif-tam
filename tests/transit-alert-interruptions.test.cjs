@@ -44,6 +44,23 @@ test("a detour's closed stop list outlines only the usual bounded span, preservi
   assert.equal(ui.affectedLineFeatures(fixture().network, [upcoming], now).length, 0);
 });
 
+test("works and ordinary detours retain distinct map categories while no service takes priority", () => {
+  const description = "Ligne 2 déviée entre Alpha et Delta.";
+  const detour = normalize(description, { cause: "DEMONSTRATION" });
+  assert.equal(detour.category, "detour");
+  assert.equal(ui.affectedLineFeatures(fixture().network, [detour], now)[0].properties.category, "detour");
+  for (const extra of [{ cause: "CONSTRUCTION" }, { cause: "MAINTENANCE" }, { headerText: { translation: [{ text: "Travaux ligne 2" }] } }]) {
+    const works = normalize(description, extra);
+    assert.equal(works.category, "works");
+    assert.ok(works.detour.paths.length, "the affected section remains available for yellow hatching");
+    assert.equal(ui.affectedLineFeatures(fixture().network, [works], now)[0].properties.category, "works");
+    assert.deepEqual(plain(works.stopImpacts), [], "a track treatment does not close its platforms");
+  }
+  const closed = normalize("Ligne 2 interrompue entre Alpha et Delta.", { cause: "CONSTRUCTION", effect: "NO_SERVICE" });
+  assert.equal(closed.category, "no_service");
+  assert.equal(ui.affectedLineFeatures(fixture().network, [closed], now)[0].properties.category, "no_service");
+});
+
 test("isolated closures, uncertain stop names, branches and loops cannot fabricate detour spans", () => {
   for (const description of ["Ligne 2 déviée. Arrêt Bravo non desservi.", "Ligne 2 déviée. Arrêts Bravo et Inconnu non desservis.", "Arrêts Bravo et Delta non desservis."]) {
     const alert = normalize(description);

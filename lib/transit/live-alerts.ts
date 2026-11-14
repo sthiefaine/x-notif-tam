@@ -142,7 +142,7 @@ export function normalizeAlerts(feed: RealtimeFeed, network: TransitNetwork, loo
     }
     const section = interpreted?.interruption || detoured?.detour;
     const geometry = interpreted?.geometry ?? detoured?.geometry ?? (routeIds.length === 1 && !interpreted && !detoured ? segmentGeometry(routeIds[0], stopIds, `${header} ${description}`, network, lookup) : undefined);
-    const category: LiveAlert["category"] = interpreted || effect === "NO_SERVICE" || textInterruption ? "no_service" : detoured || textDetour || effect === "DETOUR" ? "detour" : producerWorks || keywordWorks ? "works" : "other";
+    const category: LiveAlert["category"] = interpreted || effect === "NO_SERVICE" || textInterruption ? "no_service" : producerWorks || keywordWorks ? "works" : detoured || textDetour || effect === "DETOUR" ? "detour" : "other";
     const matchedStopNames = [...new Set(stopImpacts.filter((impact) => impact.serviceStatus === "not_served").map((impact) => network.stops.find((stop) => stop.id === impact.stopId)?.name).filter((name): name is string => Boolean(name)))];
     const reasons: NonNullable<LiveAlert["interpretation"]>["reasons"] = [];
     if (routeIds.some((id) => !knownRouteIds.has(id))) reasons.push("unknown_route");
@@ -150,7 +150,7 @@ export function normalizeAlerts(feed: RealtimeFeed, network: TransitNetwork, loo
     if (section?.extent === "segment" && !section.paths.length) reasons.push("segment_unresolved");
     else if (section?.extent === "segment" && !geometry) reasons.push("geometry_unavailable");
     if (textInterruption && !section && !geometry) reasons.push("segment_unresolved");
-    if (category === "detour") reasons.push("replacement_route_unavailable");
+    if (detoured || category === "detour") reasons.push("replacement_route_unavailable");
     const located = Boolean(geometry || section?.extent === "line");
     const unresolved = reasons.some((reason) => reason !== "replacement_route_unavailable");
     const status: NonNullable<LiveAlert["interpretation"]>["status"] = unresolved ? located || matchedStopNames.length ? "partial" : "unresolved"

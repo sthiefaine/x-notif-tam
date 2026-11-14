@@ -18,17 +18,22 @@
 .schematic { position: relative; }
 .track { position: absolute; left: calc(var(--diagram-axis) - 2.5px); width: 5px; border-radius: 8px; background: var(--diagram-line, #475569); opacity: .75; }
 .interruptedTrack { position:absolute; left:calc(var(--diagram-axis) - 3.5px); width:7px; border-radius:8px; background:repeating-linear-gradient(to bottom,#dc2638 0 9px,#252b34 9px 13px); pointer-events:none; }
-.detourTrack { background:repeating-linear-gradient(135deg,var(--diagram-line,#2458bd) 0 6px,#facc15 6px 12px); }
+.detourTrack { background:repeating-linear-gradient(to bottom,#ea580c 0 10px,#fff 10px 15px); box-shadow:0 0 0 1px #fdba74; }
+.worksTrack { background:repeating-linear-gradient(135deg,var(--diagram-line,#2458bd) 0 6px,#facc15 6px 12px); }
 .interruptionNotices { display:grid; gap:8px; margin:12px 0; }
 .interruptionNotice { display:flex; gap:9px; padding:11px; border:1px solid #fecaca; border-radius:11px; background:#fff5f5; color:#b91c1c; }
 .interruptionNotice>svg { flex:none; margin-top:1px; }
 .interruptionNotice p { margin:0; min-width:0; }
 .interruptionNotice strong { display:block; font-size:11px; line-height:1.5; }
 .interruptionNotice small { display:block; margin-top:5px; font-size:10px; line-height:1.5; color:#9f4747; }
-.detourNotice { border-color:#f2d279; background:#fffbeb; color:#946315; }
-.detourNotice small { color:#946315; }
-.detouredStation .stationDot { border-color:#c58b11; }
-.detouredStation .stationName small { color:#946315; }
+.detourNotice { border-color:#fdba74; background:#fff7ed; color:#9a3412; }
+.detourNotice small { color:#9a3412; }
+.worksNotice { border-color:#f2d279; background:#fffbeb; color:#946315; }
+.worksNotice small { color:#946315; }
+.detouredStation .stationDot { border-color:#ea580c; }
+.detouredStation .stationName small { color:#9a3412; }
+.worksStation .stationDot { border-color:#c58b11; }
+.worksStation .stationName small { color:#946315; }
 .stations { list-style: none; padding: 0; margin: 0; }
 .stationRow { height: 60px; display: flex; align-items: center; margin: 0; }
 .stationButton { display: flex; align-items: center; gap: 11px; width: calc(100% - var(--diagram-axis) + 15px); margin-left: calc(var(--diagram-axis) - 15px); padding: 8px 7px 8px 5px; text-align: left; color: inherit; border: 0; border-radius: 10px; background: transparent; cursor: pointer; min-width: 0; }
@@ -55,7 +60,8 @@
 .legendStale { background: #a3aab4; }
 .legendProlonged { background: #a78bce; }
 .legend .legendInterruption { width:16px; height:4px; border-radius:2px; background:repeating-linear-gradient(to right,#dc2638 0 6px,#252b34 6px 9px); }
-.legend .legendDetour { width:16px; height:4px; border-radius:2px; background:repeating-linear-gradient(135deg,var(--diagram-line,#2458bd) 0 4px,#facc15 4px 8px); }
+.legend .legendDetour { width:16px; height:4px; border-radius:2px; background:repeating-linear-gradient(to right,#ea580c 0 6px,#fff 6px 9px); box-shadow:0 0 0 1px #fdba74; }
+.legend .legendWorks { width:16px; height:4px; border-radius:2px; background:repeating-linear-gradient(135deg,var(--diagram-line,#2458bd) 0 4px,#facc15 4px 8px); }
 .unplaced { display: grid; gap: 5px; margin-top: 14px; padding-top: 10px; border-top: 1px solid #eef1f5; }
 .unplaced > strong { font-size: 10px; line-height: 1.5; color: #758298; margin-bottom: 3px; }
 .unplaced button { display: flex; gap: 9px; text-align: left; border: 0; background: #f8fafc; padding: 8px; border-radius: 7px; cursor: pointer; font-size: 10px; color: #4d5d72; }

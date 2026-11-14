@@ -153,3 +153,20 @@ test("a stop-only detour displays the known closures without inventing a detour 
   assert.ok(!html.includes("detourTrack"));
   assert.ok(!html.includes("Informations non localisées sur la ligne"));
 });
+
+test("works on the same located span have their own notice, track and accessible labels", () => {
+  const alert = { id: "works", category: "works", routeIds: ["A"], stopIds: [], periods: [], description: "Travaux et déviation.", detour: {
+    evidence: "explicit_text", extent: "segment", fromName: "Zebra", toName: "Milieu", paths: [{ directionId: 0, stopIds: ["z", "a", "m"], patternIds: ["p"] }],
+  }, geometry: { type: "LineString", coordinates: stops.map((stop) => [stop.lon, stop.lat]) } };
+  const html = renderToStaticMarkup(React.createElement(Diagram, { network, route, vehicles: [], alerts: [alert], now }));
+  assert.ok(html.includes("Travaux · Zebra → Milieu"));
+  assert.ok(html.includes("worksTrack"));
+  assert.ok(html.includes("worksNotice"));
+  assert.ok(html.includes("sur la portion en travaux"));
+  assert.ok(!html.includes("detourTrack"));
+  assert.ok(!html.includes("sur la portion déviée"));
+  assert.ok(!html.includes("Non desservi"));
+  alert.periods = [{ start: new Date(now + 60000).toISOString(), end: null }];
+  const future = renderToStaticMarkup(React.createElement(Diagram, { network, route, vehicles: [], alerts: [alert], now }));
+  assert.ok(!future.includes("worksTrack"));
+});

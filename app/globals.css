@@ -92,12 +92,14 @@ button svg,a svg { flex:none; }
 .line-information svg { flex:none; }
 .incident-card { background:#f4f7fc; border:1px solid #e4ebf5; border-radius:9px; padding:13px; margin-bottom:10px; }
 .incident-card.works { background:#fffcf1; border-color:#f1e6c5; }
+.incident-card.detour { background:#fff7ed; border-color:#fdba74; }
 .incident-card.interrupted { background:#fff5f4; border-color:#f2dcd9; }
 .incident-card.upcoming { background:#f9fafc; border-color:#e8ecf2; }
 .incident-eyebrow { display:flex; align-items:flex-start; justify-content:space-between; gap:8px; color:#6680a5; font-size:8px; }
 .incident-eyebrow>span { display:flex; align-items:center; gap:4px; font-weight:650; }
 .incident-eyebrow time { font-size:8px; color:#8a97a8; text-align:right; }
 .works .incident-eyebrow { color:#9b7121; }
+.detour .incident-eyebrow { color:#b3430a; }
 .interrupted .incident-eyebrow { color:#b54c46; }
 .incident-card h3 { font-size:11px; line-height:1.6; font-weight:650; margin:9px 0 5px; }
 .incident-card p { color:#788498; font-size:10px; line-height:1.7; margin:5px 0; white-space:pre-line; overflow-wrap:anywhere; }
@@ -161,6 +163,8 @@ button svg,a svg { flex:none; }
 .legend-items>span { display:flex; align-items:center; gap:9px; font-size:9px; color:#7a899d; }
 .legend-line { display:inline-block; width:23px; height:6px; border-radius:2px; background:#2458bd; flex:none; }
 .works-pattern { background:repeating-linear-gradient(125deg,#2458bd 0px,#2458bd 4px,#ffcf4c 4px,#ffcf4c 7px); }
+.detour-pattern { background:repeating-linear-gradient(90deg,#ea580c 0 8px,#fff 8px 12px); box-shadow:0 0 0 1px #fdba74; }
+.legend-items>span.legend-positions { margin-top:4px; border-top:1px solid #e7ebf1; padding-top:12px; }
 .interruption-pattern { background:repeating-linear-gradient(90deg,#cf4251 0px,#cf4251 5px,#273143 5px,#273143 8px); }
 .legend-lavender,.legend-stale { width:10px; height:10px; border-radius:50%; margin:0 6px; background:#d1bce4; border:1px solid #8d6eab; flex:none; }
 .legend-stale { background:#a3adb9; border-color:#8896a8; }
