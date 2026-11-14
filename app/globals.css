@@ -450,6 +450,14 @@ button svg,a svg { flex:none; }
 .panel-tabs button.selected { border-color:#cbdaf0; color:#2458bd; background:#fff; box-shadow:0 2px 5px #1029430a; }
 .icon-button { min-width:44px; min-height:44px; border-radius:10px; }
 .back-button { min-height:44px; padding:4px 9px; margin:0 0 12px; background:#eff4fc; border:1px solid #dce6f5; border-radius:10px; color:#42648f; width:fit-content; }
+.back-button.network-return { width:100%; min-height:52px; justify-content:space-between; gap:12px; padding:10px 14px; margin-bottom:18px; color:#fff; background:linear-gradient(115deg,#2458bd,#177f96); border-color:#2458bd; border-radius:14px; box-shadow:0 5px 14px #2458bd25; font-size:13px; font-weight:750; transition:background .18s,box-shadow .18s,transform .18s; }
+.network-return .return-arrow { display:grid; place-items:center; width:30px; height:30px; border-radius:9px; background:#ffffff25; transition:transform .18s; }
+.network-return .return-label { flex:1; text-align:left; }
+.network-return:hover { background:linear-gradient(115deg,#1949a8,#106d82); box-shadow:0 7px 18px #2458bd35; }
+.network-return:hover .return-arrow { transform:translateX(-2px); }
+.network-return:active { transform:translateY(1px); }
+.network-return:focus-visible { outline:3px solid #f4c84d; outline-offset:3px; }
+@media (prefers-reduced-motion:reduce) { .back-button.network-return,.network-return .return-arrow { transition:none; } }
 .map-legend:not(.open) .legend-items { display:none; }
 .legend-heading { min-height:40px; cursor:pointer; }
 .map-legend:not(.open) { padding-bottom:0; }

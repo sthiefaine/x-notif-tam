@@ -43,7 +43,7 @@ export function geometryIsValid(geometry: LiveAlert["geometry"]): boolean {
 export function affectedLineFeatures(network: TransitNetwork, alerts: LiveAlert[], now: number) {
   return alerts.flatMap((alert) => {
     const section = alert.interruption || alert.detour;
-    const interpreted = section?.evidence === "explicit_text" && (section.extent === "line" || section.paths.length > 0);
+    const interpreted = section && (section.evidence === "explicit_text" || section.evidence === "closed_stop_span") && (section.extent === "line" || section.paths.length > 0);
     if (!alertActive(alert, now) || (alert.confidence !== "official" && !interpreted) || !["works", "detour", "no_service"].includes(alert.category)) return [];
     const properties = { alertId: alert.id, category: alert.category, color: safeColor(network.routes.find((route) => alert.routeIds.includes(route.id))?.color), routeIds: alert.routeIds.join("|") };
     if (alert.scope === "segment" && geometryIsValid(alert.geometry)) return [{ type: "Feature" as const, id: alert.id, properties, geometry: alert.geometry! }];

@@ -4,7 +4,7 @@ import type { RealtimeFeed } from "./realtime";
 import { unixMilliseconds } from "./realtime";
 import { distanceMetres } from "./dwell";
 import { alertTiming, analyzeStopImpacts } from "./alert-impacts";
-import { deriveDetour, deriveInterruption } from "./alert-interruptions";
+import { deriveDetour, deriveDetourFromClosedStops, deriveInterruption } from "./alert-interruptions";
 import { affirmativeServiceWording, scopedAlertClauses } from "./alert-text";
 export { alertTiming, stopImpactForRoute, stopServiceImpacts } from "./alert-impacts";
 
@@ -124,8 +124,7 @@ export function normalizeAlerts(feed: RealtimeFeed, network: TransitNetwork, loo
     if (!interpretations.has(interpretationKey)) interpretations.set(interpretationKey, deriveInterruption(selectors, routeIds, `${description}\n${header}`, network, lookup));
     const interpreted = interpretations.get(interpretationKey);
     if (!detours.has(interpretationKey)) detours.set(interpretationKey, !interpreted && effect !== "NO_SERVICE" ? deriveDetour(selectors, routeIds, `${description}\n${header}`, network, lookup) : undefined);
-    const detoured = detours.get(interpretationKey);
-    const geometry = interpreted?.geometry ?? detoured?.geometry ?? (routeIds.length === 1 && !interpreted && !detoured ? segmentGeometry(routeIds[0], stopIds, `${header} ${description}`, network, lookup) : undefined);
+    let detoured = detours.get(interpretationKey);
     const periods = (raw.activePeriod ?? []).slice(0, 100).map((period) => {
       const start = unixMilliseconds(period.start), end = unixMilliseconds(period.end);
       return { start: start === null ? null : new Date(start).toISOString(), end: end === null ? null : new Date(end).toISOString() };
@@ -133,10 +132,16 @@ export function normalizeAlerts(feed: RealtimeFeed, network: TransitNetwork, loo
     const timingUncertain = (raw.activePeriod ?? []).length > 100 || (raw.activePeriod ?? []).some((period) =>
       (period.start !== undefined && unixMilliseconds(period.start) === null) || (period.end !== undefined && unixMilliseconds(period.end) === null)
       || (period.start !== undefined && period.end !== undefined && Number(period.start) >= Number(period.end)));
-    const section = interpreted?.interruption || detoured?.detour;
-    const sectionStops = section?.extent === "segment" && section.paths.length ? new Set(section.paths.flatMap((path) => path.stopIds)) : undefined;
+    const explicitSection = interpreted?.interruption || detoured?.detour;
+    const sectionStops = explicitSection?.extent === "segment" && explicitSection.paths.length ? new Set(explicitSection.paths.flatMap((path) => path.stopIds)) : undefined;
     const stopAnalysis = analyzeStopImpacts(selectors, routeIds, effect, prose, network, lookup, sectionStops);
     const stopImpacts = stopAnalysis.impacts;
+    if (!interpreted && !detoured && effect !== "NO_SERVICE" && (textDetour || effect === "DETOUR") && !stopAnalysis.unresolved.length) {
+      detoured = deriveDetourFromClosedStops(selectors, routeIds, stopImpacts, network, lookup);
+      if (detoured) detours.set(interpretationKey, detoured);
+    }
+    const section = interpreted?.interruption || detoured?.detour;
+    const geometry = interpreted?.geometry ?? detoured?.geometry ?? (routeIds.length === 1 && !interpreted && !detoured ? segmentGeometry(routeIds[0], stopIds, `${header} ${description}`, network, lookup) : undefined);
     const category: LiveAlert["category"] = interpreted || effect === "NO_SERVICE" || textInterruption ? "no_service" : detoured || textDetour || effect === "DETOUR" ? "detour" : producerWorks || keywordWorks ? "works" : "other";
     const matchedStopNames = [...new Set(stopImpacts.filter((impact) => impact.serviceStatus === "not_served").map((impact) => network.stops.find((stop) => stop.id === impact.stopId)?.name).filter((name): name is string => Boolean(name)))];
     const reasons: NonNullable<LiveAlert["interpretation"]>["reasons"] = [];

@@ -94,7 +94,7 @@ export type AlertRouteSection = {
   extent: "line";
   directionId?: number;
 } | {
-  evidence: "explicit_text";
+  evidence: "explicit_text" | "closed_stop_span";
   extent: "segment";
   fromName: string;
   toName: string;

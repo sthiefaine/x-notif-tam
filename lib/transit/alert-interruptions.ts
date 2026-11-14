@@ -1,4 +1,4 @@
-import type { AlertInterruption, LiveAlert } from "./live-types";
+import type { AlertInterruption, LiveAlert, LiveStopImpact } from "./live-types";
 import type { TransitNetwork, TransitTripLookup, TransitStop } from "./types";
 import { affirmativeServiceWording, foldAlertText, normalizeStopLabel, resolveStopLabel, scopedAlertClauses } from "./alert-text";
 
@@ -208,4 +208,39 @@ export function deriveInterruption(selectors: readonly Selector[], routeIds: str
 export function deriveDetour(selectors: readonly Selector[], routeIds: string[], description: string, network: TransitNetwork, lookup: TransitTripLookup) {
   const result = deriveRouteSection(selectors, routeIds, description, network, lookup, "detour");
   return result ? { detour: result.interruption, geometry: result.geometry, anchors: result.anchors } : undefined;
+}
+
+/** Estimated affected span on the usual rails, bounded by explicitly closed stops. */
+export function deriveDetourFromClosedStops(selectors: readonly Selector[], routeIds: string[], impacts: readonly LiveStopImpact[], network: TransitNetwork, lookup: TransitTripLookup): ReturnType<typeof deriveDetour> {
+  if (routeIds.length !== 1 || selectors.some((selector) => selector.trip || selector.agencyId || selector.directionId !== undefined && selector.directionId !== 0 && selector.directionId !== 1)) return;
+  const routeId = routeIds[0], route = network.routes.find((item) => item.id === routeId);
+  if (!route || selectors.some((selector) => selector.routeType !== undefined && selector.routeType !== route.type)) return;
+  const byId = new Map(network.stops.map((stop) => [stop.id, stop]));
+  const closed = impacts.filter((impact) => impact.serviceStatus === "not_served" && impact.routeIds.includes(routeId) && byId.get(impact.stopId)?.routeIds.includes(routeId));
+  const names = new Set(closed.map((impact) => stationName(byId.get(impact.stopId)!.name)));
+  if (names.size < 2) return;
+  const paths = new Map<string, { directionId: number | null; stopIds: string[]; patternIds: string[] }>();
+  for (const pattern of Object.values(lookup.patterns).filter((item) => item.routeId === routeId)) {
+    const ids = new Set(closed.filter((impact) => impact.directionId === undefined || impact.directionId === pattern.directionId).map((impact) => impact.stopId));
+    // Every named closure must be present on this branch and in this direction.
+    const positions = pattern.stopIds.flatMap((id, index) => ids.has(id) ? [index] : []);
+    if (new Set(positions.map((index) => stationName(byId.get(pattern.stopIds[index])!.name))).size !== names.size) continue;
+    if (positions.length !== names.size) return; // Repeated quays / loop occurrences.
+    const start = positions[0], end = positions[positions.length - 1];
+    const stopIds = pattern.stopIds.slice(start, end + 1);
+    if (stopIds.length > 100 || new Set(stopIds).size !== stopIds.length || stopIds.some((id) => !byId.has(id))) return;
+    const key = `${pattern.directionId}:${stopIds.join(",")}`, previous = paths.get(key);
+    if (previous) previous.patternIds.push(pattern.id);
+    else paths.set(key, { directionId: pattern.directionId, stopIds, patternIds: [pattern.id] });
+  }
+  if (!paths.size || new Set([...paths.values()].map((path) => path.directionId)).size !== paths.size) return;
+  const resolved = [...paths.values()];
+  // Do not silently drop an explicitly identified platform/direction.
+  if (closed.some((impact) => !resolved.some((path) => path.stopIds.includes(impact.stopId)
+    && (impact.directionId === undefined || impact.directionId === path.directionId)))) return;
+  const first = resolved[0], coordinates = resolved.map((path) => clipPath(path.stopIds.map((id) => byId.get(id)!), routeId, path.directionId, network));
+  const detour: AlertInterruption = { evidence: "closed_stop_span", extent: "segment", fromName: byId.get(first.stopIds[0])!.name,
+    toName: byId.get(first.stopIds[first.stopIds.length - 1])!.name, paths: resolved };
+  return { detour, anchors: [], geometry: coordinates.some((line) => !line) ? undefined
+    : coordinates.length === 1 ? { type: "LineString", coordinates: coordinates[0]! } : { type: "MultiLineString", coordinates: coordinates as Coordinate[][] } };
 }

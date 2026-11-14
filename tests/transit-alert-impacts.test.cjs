@@ -40,9 +40,12 @@ test("November 14 bus 6/7 alert resolves abbreviated stops on each actual route 
   }, { network, lookup }), id: `copy-${index}` }));
   for (const alert of copies) {
     assert.equal(alert.category, "detour");
-    assert.equal(alert.interpretation.status, "stops_located");
+    assert.equal(alert.interpretation.status, alert.routeIds[0] === "6" ? "located" : "stops_located");
     assert.deepEqual(plain(alert.interpretation.unresolvedStops), []);
-    assert.equal(alert.geometry, undefined, "a closure list is not a detour itinerary");
+    if (alert.routeIds[0] === "6") {
+      assert.equal(alert.detour.evidence, "closed_stop_span");
+      assert.equal(alert.geometry.type, "MultiLineString");
+    } else assert.equal(alert.geometry, undefined, "one closed station cannot establish an affected span");
     assert.equal(alerts.isAlertActive(alert, now), false);
     assert.equal(alerts.isAlertActive(alert, now + 600000), true);
     assert.equal(alerts.isAlertActive(alert, now + 1200000), false);
@@ -51,9 +54,10 @@ test("November 14 bus 6/7 alert resolves abbreviated stops on each actual route 
     assert.ok(alert.stopImpacts.every((impact) => impact.directionId === 0 || impact.directionId === 1));
   }
   const grouped = display.groupDisplayAlerts(copies);
-  assert.equal(grouped.length, 1);
-  assert.deepEqual(plain(grouped[0].routeIds), ["6", "7"]);
-  assert.equal(grouped[0].sourceIds.length, 4);
+  assert.equal(grouped.length, 2, "different affected portions keep their own route and colour");
+  assert.deepEqual(plain(grouped[0].routeIds), ["6"]);
+  assert.equal(grouped[0].sourceIds.length, 2, "identical located copies are still grouped");
+  assert.equal(grouped[0].interpretation.status, "located");
   assert.equal(grouped[0].interpretation.matchedStopNames.length, 2);
   assert.ok(grouped[0].stopImpacts.filter((impact) => ["2220", "6236"].includes(impact.stopId)).every((impact) => !impact.routeIds.includes("7")));
   assert.equal(impacts.selectMapAlerts(grouped, now).alerts.length, 0);
@@ -74,21 +78,22 @@ test("November 14 evening multi-line notice resolves Blum and Gare Maguelone wit
   }, { network, lookup }), id: `evening-${index}` }));
   for (const alert of copies) {
     assert.equal(alert.category, "detour");
-    assert.equal(alert.interpretation.status, "stops_located");
+    assert.equal(alert.interpretation.status, "located");
     assert.deepEqual(plain(alert.interpretation.unresolvedStops), []);
     const names = new Set(alert.stopImpacts.map((impact) => network.stops.find((stop) => stop.id === impact.stopId).name));
     assert.deepEqual(names, new Set(alert.routeIds[0] === "1" ? ["Léon Blum", "Gare Saint-Roch", "Comédie"] : ["Gare Saint-Roch", "Comédie"]));
     assert.equal(alert.stopImpacts.length, alert.routeIds[0] === "1" ? 6 : 4);
     assert.ok(alert.stopImpacts.every((impact) => impact.directionId === 0 || impact.directionId === 1));
-    assert.equal(alert.geometry, undefined, "a named closure list does not define the replacement route");
+    assert.equal(alert.detour.evidence, "closed_stop_span");
+    assert.equal(alert.geometry.type, "MultiLineString", "the usual affected rails are highlighted, with no replacement itinerary");
     assert.ok(alert.stopImpacts.every((impact) => !network.stops.find((stop) => stop.id === impact.stopId).name.includes("République")));
     assert.equal(alerts.isAlertActive(alert, Date.parse("2026-11-14T18:54:59Z")), false);
     assert.equal(alerts.isAlertActive(alert, Date.parse("2026-11-14T18:55:00Z")), true);
     assert.equal(alerts.isAlertActive(alert, Date.parse("2026-11-14T22:59:00Z")), false);
   }
   const grouped = display.groupDisplayAlerts(copies);
-  assert.equal(grouped.length, 1);
-  assert.deepEqual(plain(grouped[0].routeIds), ["1", "2"]);
+  assert.equal(grouped.length, 2);
+  assert.deepEqual(plain(grouped[0].routeIds), ["1"]);
   assert.equal(grouped[0].interpretation.matchedStopNames.length, 3);
   assert.ok(grouped[0].stopImpacts.filter((impact) => ["41141", "41215"].includes(impact.stopId)).every((impact) => !impact.routeIds.includes("2")));
 });

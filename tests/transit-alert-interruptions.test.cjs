@@ -28,6 +28,37 @@ function normalize(description, extra = {}, data = fixture()) {
     descriptionText: { translation: [{ text: description, language: "fr" }] }, ...extra } }] }, data.network, data.lookup)[0];
 }
 
+test("a detour's closed stop list outlines only the usual bounded span, preserving actual closure evidence", () => {
+  const alert = normalize("Ligne 2 déviée dans les deux sens. Arrêts Bravo et Delta non desservis.");
+  assert.equal(alert.detour.evidence, "closed_stop_span");
+  assert.equal(alert.detour.fromName, "Bravo");
+  assert.equal(alert.detour.toName, "Delta");
+  assert.deepEqual(plain(alert.detour.paths[0].stopIds), ["1", "2", "3"]);
+  assert.deepEqual(plain(alert.stopImpacts.map((impact) => impact.stopId)), ["1", "3"], "Charlie is on the affected span but has no announced platform closure");
+  assert.equal(alert.scope, "segment");
+  const features = ui.affectedLineFeatures(fixture().network, [alert], now);
+  assert.equal(features.length, 1);
+  assert.equal(features[0].properties.color, "#ef7d00");
+  assert.deepEqual(plain(features[0].geometry.coordinates), fixture().network.lineFeatures.features[0].geometry.coordinates.slice(1));
+  const upcoming = { ...alert, periods: [{ start: new Date(now + 60000).toISOString(), end: null }] };
+  assert.equal(ui.affectedLineFeatures(fixture().network, [upcoming], now).length, 0);
+});
+
+test("isolated closures, uncertain stop names, branches and loops cannot fabricate detour spans", () => {
+  for (const description of ["Ligne 2 déviée. Arrêt Bravo non desservi.", "Ligne 2 déviée. Arrêts Bravo et Inconnu non desservis.", "Arrêts Bravo et Delta non desservis."]) {
+    const alert = normalize(description);
+    assert.equal(alert.detour, undefined, description);
+    assert.equal(alert.geometry, undefined, description);
+  }
+  const data = fixture();
+  data.network.stops.push({ id: "branch", name: "Branche", lat: 43.601, lon: 3.804, routeIds: ["2"] });
+  data.lookup.patterns.branch = { ...data.lookup.patterns.p, id: "branch", stopIds: ["0", "1", "branch", "3"] };
+  assert.equal(normalize("Ligne 2 déviée. Arrêts Bravo et Delta non desservis.", {}, data).detour, undefined);
+  delete data.lookup.patterns.branch;
+  data.lookup.patterns.p.stopIds = ["0", "1", "2", "1", "3"];
+  assert.equal(normalize("Ligne 2 déviée. Arrêts Bravo et Delta non desservis.", {}, data).detour, undefined);
+});
+
 test("November 14: numeric two-way wording does not become part of Saint-Denis", () => {
   const alert = normalize("Suite à une manifestation, la ligne 3 est interrompue entre les stations Jules Guesde et Saint-Denis dans les 2 sens. ",
     { informedEntity: [{ routeId: "3" }], effect: "MODIFIED_SERVICE" }, { network: realNetwork, lookup: realLookup });

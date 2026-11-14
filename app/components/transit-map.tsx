@@ -151,7 +151,7 @@ export default function TransitMap(props: Props) {
         // bundler rewrite the worker's import.meta URL breaks it in Turbopack.
         maplibregl.setWorkerUrl("/vendor/maplibre/maplibre-gl-worker.mjs");
         map = new maplibregl.Map({
-          container: container.current, style: styleUrl, center: [3.879, 43.6119], zoom: 11.4,
+          container: container.current, style: styleUrl, center: [3.879, 43.6119], zoom: 13,
           maxZoom: 18, minZoom: 8, attributionControl: false, cooperativeGestures: false, maxPitch: 0,
           locale: { "NavigationControl.ZoomIn": "Zoomer", "NavigationControl.ZoomOut": "Dézoomer", "AttributionControl.ToggleAttribution": "Crédits de la carte" },
         });
@@ -215,8 +215,7 @@ export default function TransitMap(props: Props) {
     source(map, "tam-stops")?.setData({ type: "FeatureCollection", features: props.network.stops.map((stop) => ({ type: "Feature", id: stop.id, properties: { id: stop.id, name: stop.name, routeKeys: `|${stop.routeIds.join("|")}|` }, geometry: { type: "Point", coordinates: [stop.lon, stop.lat] } })) });
     if (!initialFit.current) {
       initialFit.current = true;
-      const bounds = boundsFor(props.network, null);
-      if (!bounds.isEmpty()) map.fitBounds(bounds, { padding: 32, maxZoom: 12.5, duration: 0 });
+      map.jumpTo({ center: [3.879, 43.6119], zoom: 13 });
     }
   }, [ready, props.network]);
 
