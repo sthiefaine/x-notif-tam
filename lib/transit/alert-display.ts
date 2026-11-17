@@ -16,11 +16,13 @@ export function groupDisplayAlerts(alerts: readonly LiveAlert[]): LiveAlert[] {
   const groups = new Map<string, LiveAlert>();
   const text = (value: string) => value.trim().replace(/\s+/g, " ");
   for (const alert of [...alerts].sort((a, b) => a.id.localeCompare(b.id))) {
+    const description = alert.category === "no_service" && alert.interruption?.extent === "line"
+      ? text(alert.description).toLowerCase().replace(/\b(?:circulation|trafic|service(?: commercial)?)\s+(?=interrompu[es]*\b)/g, "") : text(alert.description);
     // Located sections can differ between routes even when their source prose agrees.
     const key = !alert.routeIds.length || alert.routeAssociation === "unresolved" ? `id:${alert.id}`
-      : JSON.stringify([text(alert.header), text(alert.description), [...alert.periods].sort((a, b) => (a.start || "").localeCompare(b.start || "")),
+      : JSON.stringify([text(alert.header), description, [...alert.periods].sort((a, b) => (a.start || "").localeCompare(b.start || "")),
         alert.timingUncertain || false, alert.category, alert.scope, alert.effect, alert.cause, alert.classificationSource, alert.confidence,
-        alert.geometry || alert.interruption || alert.detour ? [alert.routeIds, alert.geometry, alert.interruption, alert.detour] : null]);
+        alert.geometry || alert.interruption || alert.detour ? [alert.routeIds, alert.geometry, alert.geometryPartial || false, alert.interruption, alert.detour] : null]);
     const previous = groups.get(key);
     if (!previous) {
       groups.set(key, { ...alert, sourceIds: [...(alert.sourceIds || [alert.id])], routeIds: [...alert.routeIds], stopIds: [...alert.stopIds], stopImpacts: mergeImpacts(alert.stopImpacts || []) });

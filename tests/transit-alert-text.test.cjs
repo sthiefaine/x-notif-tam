@@ -4,6 +4,18 @@ const { loadTypeScript } = require("./helpers/load-typescript.cjs");
 const text = loadTypeScript("lib/transit/alert-text.ts");
 const plain = (value) => JSON.parse(JSON.stringify(value));
 
+test("unique short station names and one long-word typo resolve without dropping qualifiers", () => {
+  const stop = (id, name) => ({ id, name, lat: 43.6, lon: 3.8, routeIds: ["3"] });
+  const stops = [stop("p", "Pablo Picasso"), stop("j", "Jules Guesde"), stop("8", "Place du 8 Mai")];
+  assert.equal(text.resolveStopLabel("Picasso", stops).stops[0].id, "p");
+  assert.equal(text.resolveStopLabel("Jules Guesdes", stops).stops[0].id, "j");
+  assert.equal(text.resolveStopLabel("8 mai", stops).stops[0].id, "8");
+  assert.equal(text.resolveStopLabel("Picasso Nord", stops).status, "unknown");
+  assert.equal(text.resolveStopLabel("Jules Guezdez", stops).status, "unknown");
+  assert.equal(text.resolveStopLabel("Picasso", [...stops, stop("other", "Studio Picasso")]).status, "ambiguous");
+  assert.equal(text.resolveStopLabel("Jules Guesdes", [...stops, stop("other", "Jules Guesder")]).status, "ambiguous");
+});
+
 test("shared plural line lists are scoped to each named route, including numbers in words", () => {
   for (const list of ["6 et 7", "6, 7", "6 / 7", "six et sept"]) {
     const source = `Manifestation : lignes ${list} déviées dans les deux sen - Peyrou et Albert 1er non desservis.`;

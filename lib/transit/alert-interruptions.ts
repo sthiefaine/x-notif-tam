@@ -1,6 +1,6 @@
 import type { AlertInterruption, LiveAlert, LiveStopImpact } from "./live-types";
 import type { TransitNetwork, TransitTripLookup, TransitStop } from "./types";
-import { affirmativeServiceWording, foldAlertText, normalizeStopLabel, resolveStopLabel, scopedAlertClauses } from "./alert-text";
+import { affirmativeServiceWording, foldAlertText, normalizeStopLabel, resolveStopLabel, scopedAlertClauses, uncertainServiceWording } from "./alert-text";
 
 type Selector = { routeId?: string; stopId?: string; directionId?: number; trip?: unknown; routeType?: number; agencyId?: string };
 type Coordinate = [number, number];
@@ -90,7 +90,7 @@ function sameCorridor(a: Coordinate[], b: Coordinate[], tolerance: number): bool
  * Some source features carry identical direction tags for both rails. Ordered GTFS
  * waypoints, monotonic projection and corridor agreement establish the usable path.
  */
-function clipPath(stops: TransitStop[], routeId: string, direction: number | null, network: TransitNetwork): Coordinate[] | undefined {
+function clipPath(stops: TransitStop[], routeId: string, direction: number | null, network: TransitNetwork, onAmbiguous?: () => void): Coordinate[] | undefined {
   const candidates: { coordinates: Coordinate[]; error: number; boundaryError: number }[] = [];
   const features = network.lineFeatures.features.filter((item) => item.properties.routeId === routeId);
   const taggedDirections = new Set(features.map((item) => item.properties.direction).filter((value) => value === 0 || value === 1));
@@ -126,7 +126,8 @@ function clipPath(stops: TransitStop[], routeId: string, direction: number | nul
   const bestBoundary = Math.min(...candidates.map((candidate) => candidate.boundaryError));
   const comparable = candidates.filter((candidate) => candidate.boundaryError <= bestBoundary + 20).sort((a, b) => a.error - b.error);
   const best = comparable[0];
-  if (!best || comparable.some((candidate) => !sameCorridor(best.coordinates, candidate.coordinates, 35))) return;
+  if (!best) return;
+  if (comparable.some((candidate) => !sameCorridor(best.coordinates, candidate.coordinates, 35))) { onAmbiguous?.(); return; }
   return best.coordinates;
 }
 
@@ -151,7 +152,34 @@ function resolvePaths(from: string[], to: string[], routeId: string, direction: 
   return [...paths.values()];
 }
 
-function deriveRouteSection(selectors: readonly Selector[], routeIds: string[], description: string, network: TransitNetwork, lookup: TransitTripLookup, kind: "interruption" | "detour"): { interruption: AlertInterruption; geometry?: LiveAlert["geometry"]; anchors?: LiveAlert["mapAnchors"] } | undefined {
+/** A new terminus near one normal endpoint identifies only the short removed tail. */
+function temporaryTerminus(clauses: string[], stops: TransitStop[], routeId: string, direction: number | undefined, network: TransitNetwork, lookup: TransitTripLookup) {
+  const labels = clauses.filter((clause) => !uncertainServiceWording(clause)).flatMap((clause) => {
+    const match = fold(clause).match(/\bterminus(?: (?:provisoire|temporaire))?(?: de la ligne(?: [0-9]+)?)? (?:a|au) (.+)$/);
+    return match ? [match[1]] : [];
+  });
+  if (new Set(labels).size !== 1) return;
+  const point = matchStationName(labels[0], stops, network, routeId);
+  if (!point) return;
+  const byId = new Map(stops.map((stop) => [stop.id, stop]));
+  const terminals = new Map<string, TransitStop>();
+  let found = false;
+  for (const pattern of Object.values(lookup.patterns).filter((pattern) => pattern.routeId === routeId && (direction === undefined || pattern.directionId === direction))) {
+    const positions = pattern.stopIds.flatMap((id, index) => point.keys.includes(stationName(byId.get(id)?.name || "")) ? [index] : []);
+    if (positions.length !== 1 || pattern.stopIds.length < 6) return;
+    const start = positions[0], end = pattern.stopIds.length - 1 - start;
+    if (!Math.min(start, end) || Math.min(start, end) > 3 || Math.min(start, end) / (pattern.stopIds.length - 1) > .25 || Math.abs(start - end) < 2) return;
+    const stop = byId.get(pattern.stopIds[start < end ? 0 : pattern.stopIds.length - 1]);
+    const quay = byId.get(pattern.stopIds[positions[0]]);
+    if (!stop || !quay || metres([stop.lon, stop.lat], [quay.lon, quay.lat]) > 1000) return;
+    terminals.set(stationName(stop.name), stop); found = true;
+  }
+  if (!found || terminals.size !== 1) return;
+  const terminal = [...terminals.values()][0];
+  return { from: stops.find((stop) => point.keys.includes(stationName(stop.name)))!.name, to: terminal.name, fromKeys: point.keys, toKeys: [stationName(terminal.name)] };
+}
+
+function deriveRouteSection(selectors: readonly Selector[], routeIds: string[], description: string, network: TransitNetwork, lookup: TransitTripLookup, kind: "interruption" | "detour"): { interruption: AlertInterruption; geometry?: LiveAlert["geometry"]; geometryPartial?: boolean; anchors?: LiveAlert["mapAnchors"] } | undefined {
   if (routeIds.length !== 1 || selectors.some((selector) => selector.trip || selector.agencyId || selector.directionId !== undefined && selector.directionId !== 0 && selector.directionId !== 1)) return;
   const routeId = routeIds[0], route = network.routes.find((item) => item.id === routeId);
   if (!route || selectors.some((selector) => selector.routeType !== undefined && selector.routeType !== route.type)) return;
@@ -159,14 +187,18 @@ function deriveRouteSection(selectors: readonly Selector[], routeIds: string[], 
   const only = directions.size === 1 ? [...directions][0] : undefined;
   const direction = only === 0 || only === 1 ? only : undefined;
   const stops = network.stops.filter((stop) => stop.routeIds.includes(routeId));
-  const sentences = scopedAlertClauses(description, route.shortName || routeId).filter((sentence) => affirmativeServiceWording(sentence, kind));
+  const clauses = scopedAlertClauses(description, route.shortName || routeId);
+  const sentences = clauses.filter((sentence) => affirmativeServiceWording(sentence, kind));
   const results: { from: string; to: string; fromKeys?: string[]; toKeys?: string[]; references?: StationReference[] }[] = [];
   let wholeLine = false;
   for (const sentence of sentences) {
     const wording = fold(sentence);
     const bounded = sentence.match(/\bentre\s+(.+)$/i);
     if (!bounded) {
-      if (kind === "interruption" && !selectors.some((selector) => selector.stopId) && /\b(?:ensemble|totalite) de la ligne\b|\btoute la ligne\b|\bligne [a-z0-9_-]+ (?:(?:est |sera )?(?:totalement|integralement) interrompue|pas de service)\b/.test(wording)) {
+      const lineStatement = wording.match(/\bligne [a-z0-9_-]+\b(.*)$/)?.[1];
+      const qualified = /\b(?:entre|a|au|aux|vers|jusqu|depuis|apres|avant|partiel\w*|secteur|station\w*|arret\w*|terminus|troncon|direction)\b/;
+      const bareLine = lineStatement !== undefined && !qualified.test(lineStatement) && !clauses.some((clause) => /\b(?:entre|troncon|partiel\w*)\b|^(?:secteur|terminus|a |au |aux |vers |depuis |jusqu)/.test(fold(clause)));
+      if (kind === "interruption" && !selectors.some((selector) => selector.stopId) && (bareLine || /\b(?:ensemble|totalite) de la ligne\b|\btoute la ligne\b|\bligne [a-z0-9_-]+ (?:(?:est |sera )?(?:totalement|integralement) interrompue|pas de service)\b/.test(wording))) {
         wholeLine = true;
       }
       continue;
@@ -182,12 +214,14 @@ function deriveRouteSection(selectors: readonly Selector[], routeIds: string[], 
     if (resolved.length === 1) results.push(resolved[0]);
     else if (pairs.length === 1) results.push(pairs[0]);
   }
+  const limited = kind === "interruption" && sentences.length && !results.length && !wholeLine ? temporaryTerminus(clauses, stops, routeId, direction, network, lookup) : undefined;
+  if (limited) results.push(limited);
   if (wholeLine) return results.length ? undefined : { interruption: { evidence: "explicit_text", extent: "line", ...(direction === undefined ? {} : { directionId: direction }) } };
   const unique = new Map(results.map((result) => [`${stationName(result.from)}:${stationName(result.to)}`, result]));
   if (unique.size !== 1) return;
   const bound = [...unique.values()][0];
   const paths = bound.fromKeys && bound.toKeys ? resolvePaths(bound.fromKeys, bound.toKeys, routeId, direction, network, lookup) : [];
-  const interruption: AlertInterruption = { evidence: "explicit_text", extent: "segment", fromName: bound.from, toName: bound.to, paths,
+  const interruption: AlertInterruption = { evidence: limited ? "temporary_terminus" : "explicit_text", extent: "segment", fromName: bound.from, toName: bound.to, paths,
     ...(paths.length && bound.references?.length ? { stationReferences: bound.references } : {}) };
   const byId = new Map(network.stops.map((stop) => [stop.id, stop]));
   if (!paths.length || selectors.some((selector) => selector.stopId && !paths.some((path) => path.stopIds.includes(selector.stopId!)))) {
@@ -196,8 +230,19 @@ function deriveRouteSection(selectors: readonly Selector[], routeIds: string[], 
   const bounds = [...new Set(paths.flatMap((path) => [path.stopIds[0], path.stopIds[path.stopIds.length - 1]]))].map((id) => byId.get(id)!);
   const anchors = bounds.filter((stop, index) => bounds.findIndex((other) => stationName(other.name) === stationName(stop.name) && metres([other.lon, other.lat], [stop.lon, stop.lat]) <= 60) === index)
     .map((stop) => ({ kind: "segment_boundary" as const, routeId, stopId: stop.id, lat: stop.lat, lon: stop.lon, label: `Limite de ${kind === "detour" ? "la déviation" : "l’interruption"} : ${stop.name}` }));
-  const coordinates = paths.map((path) => clipPath(path.stopIds.map((id) => byId.get(id)!), routeId, path.directionId, network));
-  if (coordinates.some((line) => !line)) return { interruption, anchors };
+  const ambiguous = new Set<number>();
+  const coordinates = paths.map((path, index) => clipPath(path.stopIds.map((id) => byId.get(id)!), routeId, path.directionId, network, () => ambiguous.add(index)));
+  if (coordinates.some((line) => !line)) {
+    // A disputed branch must not erase the verified rest of the corridor.
+    // Split only a fully validated but divergent candidate into consecutive
+    // GTFS intervals. Never connect across an unresolved interval.
+    const pieces = coordinates.flatMap((line, index) => line ? [line] : ambiguous.has(index)
+      ? paths[index].stopIds.slice(1).flatMap((id, stopIndex) => {
+        const pair = clipPath([byId.get(paths[index].stopIds[stopIndex])!, byId.get(id)!], routeId, paths[index].directionId, network);
+        return pair ? [pair] : [];
+      }) : []);
+    return pieces.length ? { interruption, anchors, geometryPartial: true, geometry: { type: "MultiLineString", coordinates: pieces } } : { interruption, anchors };
+  }
   return { interruption, anchors, geometry: coordinates.length === 1 ? { type: "LineString", coordinates: coordinates[0]! } : { type: "MultiLineString", coordinates: coordinates as Coordinate[][] } };
 }
 
@@ -207,7 +252,7 @@ export function deriveInterruption(selectors: readonly Selector[], routeIds: str
 
 export function deriveDetour(selectors: readonly Selector[], routeIds: string[], description: string, network: TransitNetwork, lookup: TransitTripLookup) {
   const result = deriveRouteSection(selectors, routeIds, description, network, lookup, "detour");
-  return result ? { detour: result.interruption, geometry: result.geometry, anchors: result.anchors } : undefined;
+  return result ? { detour: result.interruption, geometry: result.geometry, geometryPartial: result.geometryPartial, anchors: result.anchors } : undefined;
 }
 
 /** Estimated affected span on the usual rails, bounded by explicitly closed stops. */
@@ -241,6 +286,6 @@ export function deriveDetourFromClosedStops(selectors: readonly Selector[], rout
   const first = resolved[0], coordinates = resolved.map((path) => clipPath(path.stopIds.map((id) => byId.get(id)!), routeId, path.directionId, network));
   const detour: AlertInterruption = { evidence: "closed_stop_span", extent: "segment", fromName: byId.get(first.stopIds[0])!.name,
     toName: byId.get(first.stopIds[first.stopIds.length - 1])!.name, paths: resolved };
-  return { detour, anchors: [], geometry: coordinates.some((line) => !line) ? undefined
+  return { detour, anchors: [], geometryPartial: undefined, geometry: coordinates.some((line) => !line) ? undefined
     : coordinates.length === 1 ? { type: "LineString", coordinates: coordinates[0]! } : { type: "MultiLineString", coordinates: coordinates as Coordinate[][] } };
 }

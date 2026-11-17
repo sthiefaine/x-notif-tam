@@ -142,6 +142,7 @@ export function normalizeAlerts(feed: RealtimeFeed, network: TransitNetwork, loo
     }
     const section = interpreted?.interruption || detoured?.detour;
     const geometry = interpreted?.geometry ?? detoured?.geometry ?? (routeIds.length === 1 && !interpreted && !detoured ? segmentGeometry(routeIds[0], stopIds, `${header} ${description}`, network, lookup) : undefined);
+    const geometryPartial = interpreted?.geometryPartial || detoured?.geometryPartial;
     const category: LiveAlert["category"] = interpreted || effect === "NO_SERVICE" || textInterruption ? "no_service" : producerWorks || keywordWorks ? "works" : detoured || textDetour || effect === "DETOUR" ? "detour" : "other";
     const matchedStopNames = [...new Set(stopImpacts.filter((impact) => impact.serviceStatus === "not_served").map((impact) => network.stops.find((stop) => stop.id === impact.stopId)?.name).filter((name): name is string => Boolean(name)))];
     const reasons: NonNullable<LiveAlert["interpretation"]>["reasons"] = [];
@@ -149,6 +150,7 @@ export function normalizeAlerts(feed: RealtimeFeed, network: TransitNetwork, loo
     if (stopAnalysis.unresolved.length) reasons.push("unresolved_stops");
     if (section?.extent === "segment" && !section.paths.length) reasons.push("segment_unresolved");
     else if (section?.extent === "segment" && !geometry) reasons.push("geometry_unavailable");
+    if (geometryPartial) reasons.push("geometry_partial");
     if (textInterruption && !section && !geometry) reasons.push("segment_unresolved");
     if (detoured || category === "detour") reasons.push("replacement_route_unavailable");
     const located = Boolean(geometry || section?.extent === "line");
@@ -162,7 +164,7 @@ export function normalizeAlerts(feed: RealtimeFeed, network: TransitNetwork, loo
       confidence: interpreted || detoured || textDetour || textInterruption || keywordWorks || geometry || stopImpacts.some((impact) => impact.evidence !== "structured") ? "estimated" : "official",
       category,
       classificationSource: interpreted || detoured || textDetour || textInterruption || keywordWorks && effect !== "NO_SERVICE" ? "keywords" : "producer",
-      geometry, ...(interpreted ? { interruption: interpreted.interruption } : {}), ...(detoured ? { detour: detoured.detour } : {}),
+      geometry, ...(geometryPartial ? { geometryPartial: true } : {}), ...(interpreted ? { interruption: interpreted.interruption } : {}), ...(detoured ? { detour: detoured.detour } : {}),
       interpretation: { version: 2, status, matchedStopNames, unresolvedStops: stopAnalysis.unresolved, reasons },
       mapAnchors: interpreted?.anchors ?? detoured?.anchors ?? (matchedStopNames.length && !stopIds.length ? [] : mapAnchors(routeIds, stopIds, network, lookup)),
     });

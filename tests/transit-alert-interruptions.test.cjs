@@ -10,6 +10,7 @@ const dwell = loadTypeScript("lib/transit/dwell.ts", { mocks: { "./realtime": re
 const impacts = loadTypeScript("lib/transit/alert-impacts.ts", { mocks: { "./alert-text": textRules } });
 const live = loadTypeScript("lib/transit/live-alerts.ts", { mocks: { "./alert-text": textRules, "./realtime": realtime, "./dwell": dwell, "./alert-impacts": impacts, "./alert-interruptions": engine } });
 const ui = loadTypeScript("app/components/transit-state.ts");
+const display = loadTypeScript("lib/transit/alert-display.ts");
 const plain = (value) => JSON.parse(JSON.stringify(value));
 const now = Date.parse("2026-11-10T13:00:00Z");
 const manifest = JSON.parse(fs.readFileSync(path.resolve(__dirname, "../data/transit/current.json")));
@@ -27,6 +28,60 @@ function normalize(description, extra = {}, data = fixture()) {
   return live.normalizeAlerts({ entity: [{ id: "alert", alert: { informedEntity: [{ routeId: "2" }],
     descriptionText: { translation: [{ text: description, language: "fr" }] }, ...extra } }] }, data.network, data.lookup)[0];
 }
+
+test("November 17 source formulations all reach the map without inventing closed platforms", () => {
+  const messages = [
+    ["4", "SUITE MANIFESTATION: Ligne 4 interrompue", "line"],
+    ["8", "SUITE MANIFESTATION- ligne 8 - CIRCULATION INTERROMPUE", "line"],
+    ["8", "SUITE MANIFESTATION- ligne 8 - INTERROMPUE", "line"],
+    ["11", "Manifestation: La Ligne 11 est déviée dans les 2 sens entre les stations Ernest Michel et Cité Mion.", "segment"],
+    ["17", "En raison des manifestations actuellement en cours, La ligne 17 est interrompue a RONDELET. Terminus de la ligne à RONDELET.", "segment"],
+    ["5", "Manifestation: ligne 5 interrompue entre St Eloi-Pezet et 8 mai", "segment"],
+    ["3", "La ligne 3 est interrompue entre les stations Picasso et Jules Guesdes dans les deux sens.", "segment"],
+  ];
+  for (const [routeId, message, extent] of messages) {
+    const alert = normalize(message, { informedEntity: [{ routeId }] }, { network: realNetwork, lookup: realLookup });
+    const section = alert.interruption || alert.detour;
+    assert.equal(section.extent, extent, `${routeId}: ${message}`);
+    assert.ok(ui.affectedLineFeatures(realNetwork, [alert], now).length, `${routeId} must have a visible affected trace`);
+    assert.deepEqual(plain(alert.stopImpacts), [], "track interruptions are distinct from platform closure declarations");
+    if (routeId === "17") {
+      assert.equal(section.evidence, "temporary_terminus");
+      assert.equal(section.fromName, "Rondelet");
+      assert.ok(section.paths.every((path) => path.stopIds.length === 2));
+    }
+    if (routeId === "3") {
+      assert.equal(alert.geometryPartial, true, "a disputed central branch must not erase the rest");
+      assert.equal(alert.interpretation.status, "partial");
+    }
+  }
+});
+
+test("unbounded line declarations preserve partial, hypothetical and resumed service qualifiers", () => {
+  for (const message of ["Ligne 2 interrompue à Bravo.", "Ligne 2 interrompue. Entre Alpha et Delta.", "Ligne 2 interrompue. Interruption entre Alpha et Delta.",
+    "Ligne 2 pourrait être interrompue.", "Ligne 2 n'est plus interrompue.", "Service interrompu pour travaux.",
+    "Ligne 2 interrompue dans un seul secteur."]) {
+    const alert = normalize(message);
+    assert.notEqual(alert.interruption?.extent, "line", message);
+  }
+});
+
+test("equivalent whole-line producer copies share one display card and preserve source identities", () => {
+  const copies = ["Ligne 2 - CIRCULATION INTERROMPUE", "Ligne 2 - INTERROMPUE", "Ligne 2 - INTERROMPUE"].map((text, index) => ({ ...normalize(text), id: `copy-${index}` }));
+  const grouped = display.groupDisplayAlerts(copies);
+  assert.equal(grouped.length, 1);
+  assert.equal(grouped[0].sourceIds.length, 3);
+  assert.deepEqual(plain(grouped[0].routeIds), ["2"]);
+  assert.equal(copies[0].sourceIds, undefined);
+  assert.equal(display.groupDisplayAlerts([copies[0], { ...normalize("Accident : Ligne 2 interrompue"), id: "other" }]).length, 2, "different reported causes remain separate");
+});
+
+test("a replacement terminus in the middle or on an ambiguous branch never closes the whole line", () => {
+  const data = fixture();
+  const alert = normalize("Ligne 2 interrompue à Bravo. Terminus provisoire à Bravo.", {}, data);
+  assert.equal(alert.interruption, undefined, "a four-stop route has no safely identifiable removed tail");
+  assert.equal(alert.geometry, undefined);
+});
 
 test("a detour's closed stop list outlines only the usual bounded span, preserving actual closure evidence", () => {
   const alert = normalize("Ligne 2 déviée dans les deux sens. Arrêts Bravo et Delta non desservis.");

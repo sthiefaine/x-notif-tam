@@ -94,7 +94,7 @@ export type AlertRouteSection = {
   extent: "line";
   directionId?: number;
 } | {
-  evidence: "explicit_text" | "closed_stop_span";
+  evidence: "explicit_text" | "closed_stop_span" | "temporary_terminus";
   extent: "segment";
   fromName: string;
   toName: string;
@@ -129,6 +129,8 @@ export interface LiveAlert {
   category: "no_service" | "detour" | "works" | "other";
   classificationSource: "producer" | "keywords";
   geometry?: TransitLineFeature["geometry"];
+  /** Verified portions only; gaps between conflicting official variants remain unpainted. */
+  geometryPartial?: boolean;
   /** An interruption of track service does not assert that its boundary stops are closed. */
   interruption?: AlertInterruption;
   /** Affected portion of the usual route, never an invented replacement itinerary. */
@@ -139,7 +141,7 @@ export interface LiveAlert {
     status: "located" | "stops_located" | "partial" | "unresolved" | "informational";
     matchedStopNames: string[];
     unresolvedStops: { name: string; routeId: string; reason: "unknown_stop" | "ambiguous_stop" | "ambiguous_direction" | "ambiguous_range" }[];
-    reasons: ("unknown_route" | "unresolved_stops" | "segment_unresolved" | "geometry_unavailable" | "replacement_route_unavailable")[];
+    reasons: ("unknown_route" | "unresolved_stops" | "segment_unresolved" | "geometry_unavailable" | "geometry_partial" | "replacement_route_unavailable")[];
   };
   /** A route_reference is a display reference, never the incident's location. */
   mapAnchors?: {

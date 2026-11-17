@@ -72,6 +72,15 @@ export function bothDirections(text: string): boolean {
 export type StopNameResolution = { status: "matched"; stops: TransitStop[]; abbreviated: boolean } | { status: "unknown" | "ambiguous"; stops: [] };
 const stopDistance = (a: Pick<TransitStop, "lat" | "lon">, b: Pick<TransitStop, "lat" | "lon">) => Math.hypot((a.lon - b.lon) * Math.cos((a.lat + b.lat) * Math.PI / 360), a.lat - b.lat) * 111195;
 
+/** One edit in a long word only; never discard a distinguishing qualifier. */
+function oneWordEdit(a: string, b: string): boolean {
+  if (Math.min(a.length, b.length) < 5 || Math.abs(a.length - b.length) > 1) return false;
+  let left = 0;
+  while (left < a.length && left < b.length && a[left] === b[left]) left++;
+  return a.length === b.length ? a.slice(left + 1) === b.slice(left + 1)
+    : a.length > b.length ? a.slice(left + 1) === b.slice(left) : a.slice(left) === b.slice(left + 1);
+}
+
 /** Producer shorthand must resolve to a real named station, never an arbitrary "Gare". */
 function qualifiedStopAlias(key: string, candidates: readonly TransitStop[]): TransitStop[] | undefined {
   if (key === "blum") return candidates.filter((stop) => normalizeStopLabel(stop.name) === "leon blum");
@@ -94,11 +103,23 @@ export function resolveStopLabel(label: string, candidates: readonly TransitStop
   const exact = groups.has(key) ? [[key, groups.get(key)!] as const] : [];
   const tokens = key.split(" ");
   const alias = exact.length ? undefined : qualifiedStopAlias(key, candidates);
-  const matches = exact.length ? exact : alias !== undefined ? alias.length ? [[normalizeStopLabel(alias[0].name), alias] as const] : [] : [...groups].filter(([name]) => {
+  let matches = exact.length ? exact : alias !== undefined ? alias.length ? [[normalizeStopLabel(alias[0].name), alias] as const] : [] : [...groups].filter(([name]) => {
     const words = name.split(" ");
     // Whole-word prefix (Peyrou), or one first-name initial (L. Blum).
     return key.length >= 4 && (name.startsWith(key + " ") || tokens.length === words.length && tokens.length >= 2
       && tokens.every((token, index) => token === words[index] || index === 0 && token.length === 1 && words[index].startsWith(token)));
+  });
+  // Omit only one leading word of a real name (Pablo Picasso / Place du 8 Mai).
+  // Exact names and known prefixes always win before this fallback.
+  if (!matches.length && alias === undefined && key.length >= 5) matches = [...groups].filter(([name]) => {
+    const words = name.split(" ");
+    return words.length === tokens.length + 1 && words.slice(1).join(" ") === key;
+  });
+  if (!matches.length && alias === undefined) matches = [...groups].filter(([name]) => {
+    const words = name.split(" ");
+    if (words.length !== tokens.length) return false;
+    const changed = tokens.flatMap((token, index) => token !== words[index] ? [index] : []);
+    return changed.length === 1 && oneWordEdit(tokens[changed[0]], words[changed[0]]);
   });
   if (!matches.length) return { status: "unknown", stops: [] };
   if (matches.length !== 1) return { status: "ambiguous", stops: [] };
